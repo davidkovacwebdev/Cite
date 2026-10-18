@@ -195,7 +195,7 @@ func _on_frozen(duration: float) -> void:
 	if not is_inside_tree() or Global.multiplayer_match_over:
 		return  # match already ended and this board's scene is gone - nothing to freeze
 	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav")
-	get_parent().show_status("Frozen", Round.FROZEN_STATUS_COLOR)
+	show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 	frozen = true
 	await get_tree().create_timer(duration).timeout
 	if Global.multiplayer_match_over:
@@ -218,6 +218,12 @@ func _add_chat_line(sender_name: String, text: String) -> void:
 	])
 
 
+# Global.run.current_round is Run's data-only Round, not the scene - the
+# real Round (which owns the overlay) is this board's parent.
+func show_status(text: String, color: Color) -> void:
+	get_parent().show_status(text, color)
+
+
 # "Static" card - opponent scrambled the visual order of our revealed
 # chunks, then restores it once the effect wears off.
 func _on_chunks_scrambled(duration: float) -> void:
@@ -226,7 +232,7 @@ func _on_chunks_scrambled(duration: float) -> void:
 	# Played before the size check so the victim still hears the card even
 	# when there's too little revealed text for the scramble to be visible.
 	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav")
-	get_parent().show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
+	show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
 	var vbox = $ScrollContainer/VBoxContainer
 	var original_order = vbox.get_children()
 	if original_order.size() <= 1:

@@ -275,14 +275,14 @@ func play_card():
 					_mark_special_used("freeze")
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav")
 					MultiplayerSync.send_freeze_opponent()
-					Global.run.current_round.show_status("Frozen", Round.FROZEN_STATUS_COLOR)
+					Global.run.current_round.current_board.show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 				16:
 					# Static - temporarily scrambles the opponent's revealed
 					# chunk order.
 					_mark_special_used("chunk_scramble")
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav")
 					MultiplayerSync.send_scramble_opponent()
-					Global.run.current_round.show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
+					Global.run.current_round.current_board.show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
 				17:
 					# Heal - multiplayer reward card, see mp_heal_amount().
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/heal.mp3", MP_HEAL_SOUND_VOLUME_DB)
