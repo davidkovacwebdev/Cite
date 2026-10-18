@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://cq601315hjahr"]
+
+[ext_resource type="Script" uid="uid://f3i0n3vtxq41" path="res://components/article_component.gd" id="1_qucla"]
+
+[node name="ArticleComponent" type="Node2D"]
+script = ExtResource("1_qucla")
+
+[node name="HTTPRequest" type="HTTPRequest" parent="."]
+
+[node name="HTTPRequestHC" type="HTTPRequest" parent="."]

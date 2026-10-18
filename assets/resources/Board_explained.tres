@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="TutorialStep" load_steps=3 format=3 uid="uid://doub6kcb5l8ow"]
+
+[ext_resource type="Script" uid="uid://c2k7c1n3bagg" path="res://assets/resources/TutorialStep.gd" id="1_b7baw"]
+[ext_resource type="Texture2D" uid="uid://gn2upiason3m" path="res://assets/tutorial_images/Board.png" id="1_k30uy"]
+
+[resource]
+script = ExtResource("1_b7baw")
+screenshot = ExtResource("1_k30uy")
+description = "Board explained dont you want me like I want you baby"
+metadata/_custom_type_script = "uid://c2k7c1n3bagg"

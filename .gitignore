@@ -1,0 +1,9 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# macOS
+.DS_Store

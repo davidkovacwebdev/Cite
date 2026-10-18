@@ -1,0 +1,104 @@
+[gd_scene load_steps=9 format=3 uid="uid://dlevdyeobm24l"]
+
+[ext_resource type="Script" uid="uid://pytbnj8ytpgj" path="res://components/health_component.gd" id="1_84tc5"]
+[ext_resource type="Shader" uid="uid://bkijq0vy2xp3k" path="res://components/HealthComponent.gdshader" id="2_2of67"]
+[ext_resource type="Texture2D" uid="uid://bjml5io13s1di" path="res://assets/sprites/HP.png" id="3_wk02i"]
+[ext_resource type="Shader" path="res://components/rounded_rect.gdshader" id="4_rounded"]
+[ext_resource type="FontFile" path="res://assets/fonts/Beholden-Bold.ttf" id="5_font"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wk02i"]
+shader = ExtResource("2_2of67")
+shader_parameter/color_left = Color(0.788, 0.537, 0.247, 1)
+shader_parameter/color_right = Color(0.949, 0.737, 0.514, 1)
+shader_parameter/glow_width = 0.2
+shader_parameter/glow_strength = 0.7
+shader_parameter/glow_interval = 10.0
+shader_parameter/speed = 1.0
+
+[sub_resource type="Gradient" id="Gradient_84tc5"]
+colors = PackedColorArray(0.788235, 0.537255, 0.247059, 1, 0.948882, 0.735794, 0.512263, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_2of67"]
+gradient = SubResource("Gradient_84tc5")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_track"]
+resource_local_to_scene = true
+shader = ExtResource("4_rounded")
+shader_parameter/color = Color(0.106, 0.114, 0.141, 1)
+shader_parameter/size = Vector2(246, 40)
+shader_parameter/radius = 6.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fill"]
+resource_local_to_scene = true
+shader = ExtResource("4_rounded")
+shader_parameter/color = Color(0.749, 0.161, 0.161, 1)
+shader_parameter/size = Vector2(246, 40)
+shader_parameter/radius = 6.0
+
+[node name="HealthComponent" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_84tc5")
+
+[node name="ClassicSkin" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="TextureRect" type="TextureRect" parent="ClassicSkin"]
+material = SubResource("ShaderMaterial_wk02i")
+layout_mode = 0
+offset_left = -4.0
+offset_top = -5.0
+offset_right = 304.0
+offset_bottom = 75.0
+texture = SubResource("GradientTexture2D_2of67")
+metadata/_edit_group_ = true
+
+[node name="ColorRect" type="ColorRect" parent="ClassicSkin"]
+layout_mode = 1
+offset_right = 300.0
+offset_bottom = 40.0
+color = Color(0.282585, 0.73398, 0.512586, 1)
+metadata/_edit_use_anchors_ = true
+
+[node name="RichTextLabel" type="RichTextLabel" parent="ClassicSkin"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 40.0
+text = "2000/2000"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="ClassicSkin"]
+position = Vector2(24, 19)
+scale = Vector2(2, 2)
+texture = ExtResource("3_wk02i")
+
+[node name="MinimalSkin" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+
+[node name="Track" type="ColorRect" parent="MinimalSkin"]
+material = SubResource("ShaderMaterial_track")
+offset_left = 68.0
+offset_right = 314.0
+offset_bottom = 40.0
+color = Color(1, 1, 1, 1)
+
+[node name="Fill" type="ColorRect" parent="MinimalSkin"]
+material = SubResource("ShaderMaterial_fill")
+offset_left = 68.0
+offset_right = 314.0
+offset_bottom = 40.0
+color = Color(1, 1, 1, 1)
+
+[node name="Label" type="RichTextLabel" parent="MinimalSkin"]
+offset_left = 68.0
+offset_right = 314.0
+offset_bottom = 40.0
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_fonts/normal_font = ExtResource("5_font")
+theme_override_font_sizes/normal_font_size = 20
+text = "2000/2000"
+horizontal_alignment = 1
+vertical_alignment = 1

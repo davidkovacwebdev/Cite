@@ -1,0 +1,281 @@
+[gd_scene load_steps=11 format=3 uid="uid://bgw5usgcqrmb1"]
+
+[ext_resource type="Script" uid="uid://camva74p8l5er" path="res://Main/main.gd" id="1_lxy7q"]
+[ext_resource type="Shader" uid="uid://bdryfs14vcjhg" path="res://scenes/background_scroll.gdshader" id="2_amygn"]
+[ext_resource type="Texture2D" uid="uid://ch6qtcgli06gj" path="res://assets/sprites/davidovac_logo.png" id="3_amygn"]
+[ext_resource type="Texture2D" uid="uid://bnmkd0r15u7ki" path="res://assets/sprites/davidovac_logosmall.png" id="3_ps1la"]
+[ext_resource type="AudioStream" uid="uid://b350210d6og6h" path="res://assets/sounds/sfx/click/click2.wav" id="5_6aewd"]
+[ext_resource type="Shader" uid="uid://mwp812r480fx" path="res://Main/Main.gdshader" id="6_u2i7p"]
+
+[sub_resource type="Gradient" id="Gradient_vnd6o"]
+colors = PackedColorArray(0.615804, 0.74274, 1, 1, 0.864675, 0.864675, 0.864675, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_6aewd"]
+gradient = SubResource("Gradient_vnd6o")
+fill_from = Vector2(0, 0.00691244)
+fill_to = Vector2(0, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_u2i7p"]
+shader = ExtResource("2_amygn")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hh5pf"]
+shader = ExtResource("6_u2i7p")
+shader_parameter/speed = 2.0
+shader_parameter/scale_amount = 0.1
+shader_parameter/rotation_amount = 0.05
+shader_parameter/pivot_offset = Vector2(100, 20)
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_lxy7q")
+
+[node name="Gradient" type="TextureRect" parent="."]
+layout_mode = 0
+offset_top = -5.0
+offset_right = 40.0
+offset_bottom = 35.0
+scale = Vector2(28.7273, 17.56)
+texture = SubResource("GradientTexture2D_6aewd")
+expand_mode = 2
+
+[node name="Background" type="TextureRect" parent="."]
+material = SubResource("ShaderMaterial_u2i7p")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -3.0
+offset_top = -5.0
+offset_right = 1157.0
+offset_bottom = 695.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_ps1la")
+expand_mode = 2
+stretch_mode = 1
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(577, 319)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(593, 107)
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("3_amygn")
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 0
+offset_right = 1150.0
+offset_bottom = 800.0
+scale = Vector2(1, 1.001)
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Play" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Play"
+
+[node name="Credits" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Credits"
+
+[node name="Tutorial" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Tutorial"
+
+[node name="Settings" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Settings"
+
+[node name="TestArticle" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Test Article"
+
+[node name="TestMultiplayerId" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Test ID (Multiplayer)"
+
+[node name="Exit" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Exit"
+
+[node name="NormalMode" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Normal"
+
+[node name="Multiplayer" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Multiplayer"
+
+[node name="BrowseGames" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Browse Games"
+
+[node name="Ranked" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+disabled = true
+text = "Ranked"
+
+[node name="HostJoinLobby" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Host / Join Lobby"
+
+[node name="LobbyDummy" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Lobby Dummy"
+
+[node name="MultiplayerBack" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Back"
+
+[node name="HardcoreMode" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Hardcore"
+
+[node name="Start" type="Button" parent="CenterContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Start"
+
+[node name="SearchFilter" type="LineEdit" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+placeholder_text = "Search playsets/cat"
+
+[node name="CategorySelection" type="VBoxContainer" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="RichTextLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer/CategorySelection"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "Playset selection"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CenterContainer/VBoxContainer/CategorySelection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 85)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="PlaysetList" type="VBoxContainer" parent="CenterContainer/VBoxContainer/CategorySelection/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="RichTextLabel2" type="RichTextLabel" parent="CenterContainer/VBoxContainer/CategorySelection"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "Category Selection"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScrollContainer2" type="ScrollContainer" parent="CenterContainer/VBoxContainer/CategorySelection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 85)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="CategoryList" type="VBoxContainer" parent="CenterContainer/VBoxContainer/CategorySelection/ScrollContainer2"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Fullscreen" type="CheckBox" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "Fullscreen"
+
+[node name="MasterVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "Master Volume"
+fit_content = true
+
+[node name="MasterVolume" type="HSlider" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="SFXVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "SFX Volume"
+fit_content = true
+
+[node name="SFXVolume" type="HSlider" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="MusicVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "Music Volume"
+fit_content = true
+
+[node name="MusicVolume" type="HSlider" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Back" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Return to Main Menu"
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("5_6aewd")
+bus = &"SFX"
+
+[node name="Tips" type="RichTextLabel" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 427.0
+offset_top = 579.0
+offset_right = 727.0
+offset_bottom = 679.0
+theme_override_colors/default_color = Color(0.279357, 0.279357, 0.279357, 1)
+theme_override_font_sizes/normal_font_size = 12
+text = "Dont you want me like I want you baby, don't you need me like I need you now"
+fit_content = true
+horizontal_alignment = 1
+
+[node name="MainMenuQuotes" type="RichTextLabel" parent="."]
+z_index = 30
+material = SubResource("ShaderMaterial_hh5pf")
+layout_mode = 0
+offset_left = 792.0
+offset_top = 76.0
+offset_right = 1092.0
+offset_bottom = 226.0
+rotation = 0.45204
+theme_override_colors/default_color = Color(1, 1, 0.498039, 1)
+theme_override_font_sizes/normal_font_size = 26
+fit_content = true
+autowrap_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[connection signal="mouse_entered" from="CenterContainer/VBoxContainer/NormalMode" to="." method="_on_normal_mode_mouse_entered"]
+[connection signal="mouse_exited" from="CenterContainer/VBoxContainer/NormalMode" to="." method="_on_normal_mode_mouse_exited"]
+[connection signal="mouse_entered" from="CenterContainer/VBoxContainer/HardcoreMode" to="." method="_on_hardcore_mode_mouse_entered"]
+[connection signal="mouse_exited" from="CenterContainer/VBoxContainer/HardcoreMode" to="." method="_on_hardcore_mode_mouse_exited"]
+[connection signal="text_changed" from="CenterContainer/VBoxContainer/SearchFilter" to="." method="_on_search_filter_text_changed"]
+[connection signal="mouse_entered" from="CenterContainer/VBoxContainer/CategorySelection" to="." method="_on_category_selection_mouse_entered"]
+[connection signal="mouse_exited" from="CenterContainer/VBoxContainer/CategorySelection" to="." method="_on_category_selection_mouse_exited"]
+[connection signal="mouse_entered" from="CenterContainer/VBoxContainer/CategorySelection/ScrollContainer" to="." method="_on_scroll_container_mouse_entered"]
+[connection signal="mouse_entered" from="CenterContainer/VBoxContainer/CategorySelection/ScrollContainer/PlaysetList" to="." method="_on_playset_list_mouse_entered"]
+[connection signal="mouse_exited" from="CenterContainer/VBoxContainer/CategorySelection/ScrollContainer/PlaysetList" to="." method="_on_playset_list_mouse_exited"]
+[connection signal="value_changed" from="CenterContainer/VBoxContainer/MasterVolume" to="." method="_on_master_volume_value_changed"]
+[connection signal="value_changed" from="CenterContainer/VBoxContainer/SFXVolume" to="." method="_on_sfx_volume_value_changed"]
+[connection signal="value_changed" from="CenterContainer/VBoxContainer/MusicVolume" to="." method="_on_music_volume_value_changed"]

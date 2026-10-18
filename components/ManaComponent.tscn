@@ -1,0 +1,76 @@
+[gd_scene load_steps=5 format=3 uid="uid://74e7maux53k3"]
+
+[ext_resource type="Script" uid="uid://cisulqb0mi5g5" path="res://components/mana_component.gd" id="1_lqrdc"]
+[ext_resource type="Texture2D" uid="uid://ce7y3cqo2o5s1" path="res://assets/sprites/mana1.png" id="2_utvb8"]
+[ext_resource type="Shader" path="res://components/rounded_rect.gdshader" id="3_shader"]
+[ext_resource type="FontFile" path="res://assets/fonts/Beholden-Bold.ttf" id="4_font"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_track"]
+resource_local_to_scene = true
+shader = ExtResource("3_shader")
+shader_parameter/color = Color(0.106, 0.114, 0.141, 1)
+shader_parameter/size = Vector2(246, 28)
+shader_parameter/radius = 6.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fill"]
+resource_local_to_scene = true
+shader = ExtResource("3_shader")
+shader_parameter/color = Color(0.204, 0.341, 0.835, 1)
+shader_parameter/size = Vector2(246, 28)
+shader_parameter/radius = 6.0
+
+[node name="ManaComponent" type="Node2D"]
+script = ExtResource("1_lqrdc")
+
+[node name="ClassicSkin" type="Node2D" parent="."]
+
+[node name="ColorRect" type="ColorRect" parent="ClassicSkin"]
+offset_top = 40.0
+offset_right = 300.0
+offset_bottom = 70.0
+color = Color(0.184314, 0.282353, 0.752941, 1)
+
+[node name="RichTextLabel" type="RichTextLabel" parent="ClassicSkin"]
+offset_top = 40.0
+offset_right = 300.0
+offset_bottom = 70.0
+text = "100/100"
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="ClassicSkin"]
+position = Vector2(25, 54)
+scale = Vector2(1.5, 1.5)
+texture = ExtResource("2_utvb8")
+
+[node name="MinimalSkin" type="Node2D" parent="."]
+
+[node name="Track" type="ColorRect" parent="MinimalSkin"]
+material = SubResource("ShaderMaterial_track")
+offset_left = 68.0
+offset_top = 40.0
+offset_right = 314.0
+offset_bottom = 68.0
+color = Color(1, 1, 1, 1)
+
+[node name="Fill" type="ColorRect" parent="MinimalSkin"]
+material = SubResource("ShaderMaterial_fill")
+offset_left = 68.0
+offset_top = 40.0
+offset_right = 314.0
+offset_bottom = 68.0
+color = Color(1, 1, 1, 1)
+
+[node name="Label" type="RichTextLabel" parent="MinimalSkin"]
+offset_left = 68.0
+offset_top = 40.0
+offset_right = 314.0
+offset_bottom = 68.0
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_fonts/normal_font = ExtResource("4_font")
+theme_override_font_sizes/normal_font_size = 20
+text = "100/100"
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1

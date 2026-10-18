@@ -1,0 +1,134 @@
+[gd_scene format=3 uid="uid://dmnykrhkljb1"]
+
+[ext_resource type="Script" uid="uid://cussnaph78yq5" path="res://scenes/credits.gd" id="1_hi4w3"]
+
+[sub_resource type="Gradient" id="Gradient_j1w2w"]
+colors = PackedColorArray(0.111197, 0.111197, 0.111197, 1, 0.212305, 0.212305, 0.212305, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mxo21"]
+gradient = SubResource("Gradient_j1w2w")
+fill_to = Vector2(0, 1)
+
+[node name="Credits" type="Control" unique_id=1447637635]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hi4w3")
+
+[node name="TextureRect" type="TextureRect" parent="." unique_id=2055843916]
+layout_mode = 0
+offset_right = 1150.0
+offset_bottom = 650.0
+texture = SubResource("GradientTexture2D_mxo21")
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=155993950]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -576.0
+offset_right = 576.0
+offset_bottom = 130.0
+grow_horizontal = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=526488089]
+layout_mode = 2
+
+[node name="Title" type="RichTextLabel" parent="CenterContainer/VBoxContainer" unique_id=2067817810]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 44
+text = "Credits"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+
+[node name="Container" type="Control" parent="." unique_id=1268254077]
+layout_mode = 1
+anchors_preset = 13
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -410.5
+offset_top = 130.0
+offset_right = 410.5
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Container" unique_id=813169866]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Container/ScrollContainer" unique_id=750569524]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 33
+alignment = 1
+
+[node name="Wikipedia" type="RichTextLabel" parent="Container/ScrollContainer/VBoxContainer" unique_id=1735377216]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 22
+theme_override_font_sizes/bold_font_size = 22
+bbcode_enabled = true
+text = "[center][b]Data & Content[/b][/center]
+
+[center]This game uses text snippets from [b]Wikipedia[/b], the free encyclopedia.
+All content is licensed under CC BY-SA 4.0.[/center]"
+fit_content = true
+autowrap_mode = 0
+
+[node name="Music" type="RichTextLabel" parent="Container/ScrollContainer/VBoxContainer" unique_id=140534648]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 22
+theme_override_font_sizes/bold_font_size = 22
+bbcode_enabled = true
+text = "[center][b]MUSIC[/b][/center]
+
+[center]Composed by Uros Predic.
+Check out his music [color=#6e67ff][url=https://open.spotify.com/artist/3RJb9GBvOZegHgWRqIQjh1]here[/url][/color][/center]"
+fit_content = true
+autowrap_mode = 0
+
+[node name="EmotionalSupport" type="RichTextLabel" parent="Container/ScrollContainer/VBoxContainer" unique_id=973911807]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 22
+theme_override_font_sizes/bold_font_size = 22
+bbcode_enabled = true
+text = "[center][b]Emotional and technical support[/b][/center]
+
+[center]My best friend Jeoum.
+Check out his new game in progress called
+[color=#6e67ff][url=https://store.steampowered.com/app/4349340/Prowl/]Prowl[/url][/color][/center]"
+fit_content = true
+autowrap_mode = 0
+
+[node name="Trailer" type="RichTextLabel" parent="Container/ScrollContainer/VBoxContainer" unique_id=1144533494]
+layout_mode = 2
+theme_override_font_sizes/normal_font_size = 22
+theme_override_font_sizes/bold_font_size = 22
+bbcode_enabled = true
+text = "[center][b]Trailer Video[/b][/center]
+
+[center]Edited by Igor Timčenko.
+Check him out [color=#6e67ff][url=https://www.linkedin.com/in/igor-tim%C4%8Denko-246b9233a/]on LinkedIn[/url][/color][/center]"
+fit_content = true
+autowrap_mode = 0
+
+[node name="Button" type="Button" parent="Container/ScrollContainer/VBoxContainer" unique_id=1619737201]
+layout_mode = 2
+text = "Return to Menu"
+
+[connection signal="meta_clicked" from="Container/ScrollContainer/VBoxContainer/Wikipedia" to="." method="_on_wikipedia_meta_clicked"]
+[connection signal="meta_clicked" from="Container/ScrollContainer/VBoxContainer/Music" to="." method="_on_wikipedia_meta_clicked"]
+[connection signal="meta_clicked" from="Container/ScrollContainer/VBoxContainer/EmotionalSupport" to="." method="_on_wikipedia_meta_clicked"]
+[connection signal="meta_clicked" from="Container/ScrollContainer/VBoxContainer/Trailer" to="." method="_on_wikipedia_meta_clicked"]
+[connection signal="pressed" from="Container/ScrollContainer/VBoxContainer/Button" to="." method="_on_button_pressed"]

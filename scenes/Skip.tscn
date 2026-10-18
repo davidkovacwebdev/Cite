@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3 uid="uid://bvyycpnfla5f0"]
+
+[ext_resource type="Script" uid="uid://q8sf3nnetqug" path="res://scenes/skip.gd" id="1_pyvdl"]
+[ext_resource type="Texture2D" uid="uid://djyqxfcc5yanh" path="res://assets/sprites/skip_arrow_og.png" id="2_pyvdl"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_lvh8u"]
+size = Vector2(29, 21)
+
+[node name="Skip" type="Node2D"]
+script = ExtResource("1_pyvdl")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(2, 2)
+texture = ExtResource("2_pyvdl")
+
+[node name="Description" type="RichTextLabel" parent="."]
+offset_left = -35.0
+offset_top = 8.0
+offset_right = 64.0
+offset_bottom = 48.0
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 13
+text = "Use this to skip
+the round"
+fit_content = true
+autowrap_mode = 0
+
+[node name="Area2D" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+position = Vector2(-0.5, -0.5)
+shape = SubResource("RectangleShape2D_lvh8u")

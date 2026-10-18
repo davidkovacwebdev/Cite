@@ -1,0 +1,136 @@
+[gd_scene load_steps=14 format=3 uid="uid://cewhaa218gieq"]
+
+[ext_resource type="Script" uid="uid://cw560bjjdmx46" path="res://scenes/round.gd" id="1_h7of1"]
+[ext_resource type="PackedScene" uid="uid://dlevdyeobm24l" path="res://components/HealthComponent.tscn" id="1_oqe1w"]
+[ext_resource type="PackedScene" uid="uid://74e7maux53k3" path="res://components/ManaComponent.tscn" id="2_a4rw8"]
+[ext_resource type="Shader" uid="uid://bdryfs14vcjhg" path="res://scenes/background_scroll.gdshader" id="2_vnd6o"]
+[ext_resource type="Texture2D" uid="uid://bnmkd0r15u7ki" path="res://assets/sprites/davidovac_logosmall.png" id="3_1f0vg"]
+[ext_resource type="PackedScene" uid="uid://cq601315hjahr" path="res://components/ArticleComponent.tscn" id="3_a4rw8"]
+[ext_resource type="PackedScene" uid="uid://b1vsmlxjfswm5" path="res://scenes/Hand.tscn" id="6_bxgkc"]
+[ext_resource type="PackedScene" uid="uid://derllsvwjqpxw" path="res://scenes/CategoryReveal.tscn" id="8_n471t"]
+[ext_resource type="PackedScene" uid="uid://b5cg51mf83tbi" path="res://scenes/DifficultyReveal.tscn" id="9_1f0vg"]
+[ext_resource type="PackedScene" path="res://components/OpponentPanel.tscn" id="10_opp4n"]
+
+[sub_resource type="Gradient" id="Gradient_vnd6o"]
+colors = PackedColorArray(0.615804, 0.74274, 1, 1, 0.864675, 0.864675, 0.864675, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_vnd6o"]
+gradient = SubResource("Gradient_vnd6o")
+fill_from = Vector2(0, 0.00691244)
+fill_to = Vector2(0, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_n471t"]
+shader = ExtResource("2_vnd6o")
+
+[node name="Round" type="Node2D"]
+script = ExtResource("1_h7of1")
+
+[node name="Gradient" type="TextureRect" parent="."]
+offset_top = -5.0
+offset_right = 40.0
+offset_bottom = 35.0
+scale = Vector2(28.7273, 17.56)
+texture = SubResource("GradientTexture2D_vnd6o")
+expand_mode = 2
+
+[node name="BackgroundScroll" type="TextureRect" parent="."]
+material = SubResource("ShaderMaterial_n471t")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -3.0
+offset_top = -5.0
+offset_right = 1157.0
+offset_bottom = 695.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3_1f0vg")
+expand_mode = 2
+stretch_mode = 1
+
+[node name="Background" type="ColorRect" parent="."]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -3.0
+offset_top = -5.0
+offset_right = 1157.0
+offset_bottom = 695.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.047, 0.051, 0.067, 1)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(577, 319)
+
+[node name="ArticleComponent" parent="." instance=ExtResource("3_a4rw8")]
+
+[node name="Control" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 5.0
+offset_top = -2.0
+offset_right = 5.0
+offset_bottom = -2.0
+size_flags_horizontal = 0
+
+[node name="HealthComponent" parent="Control" instance=ExtResource("1_oqe1w")]
+unique_name_in_owner = true
+offset_top = 1.0
+offset_bottom = 1.0
+
+[node name="ManaComponent" parent="Control" instance=ExtResource("2_a4rw8")]
+position = Vector2(0, 1)
+
+[node name="Hand" parent="." instance=ExtResource("6_bxgkc")]
+unique_name_in_owner = true
+offset_left = 278.0
+offset_top = 491.0
+offset_right = 878.0
+offset_bottom = 741.0
+
+[node name="CategoryReveal" parent="." instance=ExtResource("8_n471t")]
+position = Vector2(70, 550)
+
+[node name="DifficultyReveal" parent="." instance=ExtResource("9_1f0vg")]
+position = Vector2(175, 550)
+
+[node name="OpponentPanel" parent="." instance=ExtResource("10_opp4n")]
+
+[node name="SelfAvatar" type="TextureRect" parent="."]
+unique_name_in_owner = true
+offset_left = 5.0
+offset_top = -2.0
+offset_right = 69.0
+offset_bottom = 62.0
+expand_mode = 1
+stretch_mode = 5
+visible = false
+
+[node name="SelfNameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+offset_left = 5.0
+offset_top = 64.0
+offset_right = 69.0
+offset_bottom = 86.0
+horizontal_alignment = 1
+vertical_alignment = 1
+visible = false
+
+[node name="BigBanner" type="RichTextLabel" parent="."]
+unique_name_in_owner = true
+z_index = 100
+layout_mode = 0
+offset_left = 180.0
+offset_top = 150.0
+offset_right = 932.0
+offset_bottom = 230.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.75, 0.08, 0.08, 1)
+theme_override_font_sizes/normal_font_size = 56
+bbcode_enabled = true
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+modulate = Color(1, 1, 1, 0)

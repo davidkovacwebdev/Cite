@@ -1,0 +1,54 @@
+[gd_scene load_steps=6 format=3 uid="uid://bwh768qx44h70"]
+
+[ext_resource type="Script" uid="uid://c5mx1vgw70nn1" path="res://scenes/deck.gd" id="1_mww4s"]
+[ext_resource type="Texture2D" uid="uid://byh7bkkhk2lq5" path="res://assets/sprites/david_t2.png" id="2_1efqa"]
+[ext_resource type="Texture2D" uid="uid://ca4bt1c6n8q7c" path="res://assets/sprites/skull_happy.png" id="3_s22ja"]
+[ext_resource type="Texture2D" uid="uid://cmxitjj747oge" path="res://assets/sprites/skull_dead.png" id="4_3d78h"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_lk6u7"]
+size = Vector2(16, 16.125)
+
+[node name="Deck" type="Node2D"]
+position = Vector2(978, 388)
+script = ExtResource("1_mww4s")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+z_index = 3
+scale = Vector2(4, 4)
+texture = ExtResource("2_1efqa")
+centered = false
+
+[node name="ItemsContainer" type="Node2D" parent="Sprite2D"]
+position = Vector2(20, 50)
+
+[node name="Icon1" type="Area2D" parent="Sprite2D/ItemsContainer"]
+unique_name_in_owner = true
+z_index = 10
+position = Vector2(0.5, 0)
+
+[node name="SpriteDead" type="Sprite2D" parent="Sprite2D/ItemsContainer/Icon1"]
+unique_name_in_owner = true
+texture = ExtResource("4_3d78h")
+
+[node name="SpriteHappy" type="Sprite2D" parent="Sprite2D/ItemsContainer/Icon1"]
+unique_name_in_owner = true
+texture = ExtResource("3_s22ja")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Sprite2D/ItemsContainer/Icon1"]
+shape = SubResource("RectangleShape2D_lk6u7")
+
+[node name="Confirmation" type="RichTextLabel" parent="Sprite2D"]
+unique_name_in_owner = true
+z_index = 5
+offset_left = 5.0
+offset_top = 33.25
+offset_right = 136.0
+offset_bottom = 73.25
+scale = Vector2(0.25, 0.25)
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+text = "Click again to forfeit
+"
+fit_content = true
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1

@@ -1,0 +1,122 @@
+[gd_scene load_steps=8 format=3 uid="uid://c7bshcny81o57"]
+
+[ext_resource type="Script" uid="uid://dbugm7i8g13ka" path="res://scenes/card.gd" id="1_yiag5"]
+[ext_resource type="Texture2D" uid="uid://byh7bkkhk2lq5" path="res://assets/sprites/david_t2.png" id="2_tgmmg"]
+[ext_resource type="Texture2D" uid="uid://c5fjj76rexgs6" path="res://assets/sprites/common_card.png" id="3_4dx8l"]
+[ext_resource type="AudioStream" uid="uid://cnx1tlxuqjele" path="res://assets/sounds/sfx/woosh/woosh1.wav" id="4_qf083"]
+[ext_resource type="Shader" path="res://components/rounded_rect.gdshader" id="5_rounded"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_yiag5"]
+size = Vector2(160, 248)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_bg"]
+resource_local_to_scene = true
+shader = ExtResource("5_rounded")
+shader_parameter/color = Color(0.114, 0.122, 0.141, 1)
+shader_parameter/size = Vector2(168, 250)
+shader_parameter/radius = 10.0
+shader_parameter/border_color = Color(0.247, 0.259, 0.286, 1)
+shader_parameter/border_width = 2.0
+
+[node name="Card" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_left = -1.0
+offset_right = 168.0
+offset_bottom = 254.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_yiag5")
+
+[node name="MinimalBackground" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_bg")
+layout_mode = 2
+offset_right = 168.0
+offset_bottom = 250.0
+mouse_filter = 2
+color = Color(1, 1, 1, 1)
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(85, 127)
+scale = Vector2(4, 4)
+texture = ExtResource("2_tgmmg")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 2
+offset_right = 168.0
+offset_bottom = 250.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0)
+
+[node name="CardTitle" type="RichTextLabel" parent="."]
+clip_contents = false
+layout_mode = 2
+offset_left = 23.0
+offset_top = 15.0
+offset_right = 133.0
+offset_bottom = 65.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.431248, 0.402103, 1, 1)
+theme_override_font_sizes/normal_font_size = 22
+text = "Loading"
+fit_content = true
+scroll_active = false
+
+[node name="CardSymbol" type="Sprite2D" parent="."]
+position = Vector2(141, 25)
+scale = Vector2(4, 4)
+texture = ExtResource("3_4dx8l")
+
+[node name="Description" type="RichTextLabel" parent="."]
+layout_mode = 0
+offset_left = 22.0
+offset_top = 50.0
+offset_right = 152.0
+offset_bottom = 130.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+fit_content = true
+scroll_active = false
+autowrap_mode = 2
+
+[node name="Description2" type="RichTextLabel" parent="."]
+layout_mode = 0
+offset_left = 22.0
+offset_top = 100.0
+offset_right = 152.0
+offset_bottom = 180.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+fit_content = true
+
+[node name="Area2D" type="Area2D" parent="."]
+position = Vector2(92, 121)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+position = Vector2(-7, 6)
+shape = SubResource("RectangleShape2D_yiag5")
+
+[node name="EffectText" type="RichTextLabel" parent="."]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 165.0
+offset_right = 85.0
+offset_bottom = 205.0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/normal_font_size = 30
+autowrap_mode = 0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="EffectIcon" type="Sprite2D" parent="."]
+position = Vector2(110, 183)
+scale = Vector2(3, 3)
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]
+stream = ExtResource("4_qf083")
+bus = &"SFX"
+
+[connection signal="gui_input" from="." to="." method="_on_gui_input"]
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]

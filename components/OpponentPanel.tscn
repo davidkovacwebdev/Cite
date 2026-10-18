@@ -1,0 +1,59 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://components/opponent_panel.gd" id="1_op4n1"]
+[ext_resource type="PackedScene" uid="uid://dlevdyeobm24l" path="res://components/HealthComponent.tscn" id="2_health"]
+[ext_resource type="PackedScene" uid="uid://74e7maux53k3" path="res://components/ManaComponent.tscn" id="3_mana"]
+
+[node name="OpponentPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+z_index = 100
+offset_left = 836.0
+offset_top = 10.0
+offset_right = 1150.0
+offset_bottom = 170.0
+script = ExtResource("1_op4n1")
+
+[node name="HealthDisplay" parent="." instance=ExtResource("2_health")]
+unique_name_in_owner = true
+position = Vector2(0, 5)
+is_display_only = true
+mirror_bar = true
+
+[node name="ManaDisplay" parent="." instance=ExtResource("3_mana")]
+unique_name_in_owner = true
+position = Vector2(0, 5)
+is_display_only = true
+mirror_bar = true
+
+[node name="Avatar" type="TextureRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 250.0
+offset_top = 5.0
+offset_right = 314.0
+offset_bottom = 67.0
+expand_mode = 1
+stretch_mode = 5
+
+[node name="NameLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 250.0
+offset_top = 69.0
+offset_right = 314.0
+offset_bottom = 91.0
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "Opponent"
+
+[node name="GuessToast" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 0.0
+offset_top = 96.0
+offset_right = 314.0
+offset_bottom = 120.0
+horizontal_alignment = 1
+autowrap_mode = 2
+text = "Opponent guessed it!"

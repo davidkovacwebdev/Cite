@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1vsmlxjfswm5"]
+
+[ext_resource type="Script" uid="uid://bbc2nbjjrpj7f" path="res://scenes/hand.gd" id="1_vchyo"]
+
+[node name="Hand" type="HBoxContainer"]
+alignment = 1
+script = ExtResource("1_vchyo")

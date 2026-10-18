@@ -1,0 +1,68 @@
+[
+	{
+		"id": 15924,
+		"achievement": "ACH_JULIUS",
+		"sound" : "/"
+	},
+	{
+		"id": 14995351,
+		"achievement": "ACH_HEEHEE",
+		"sound" : "ACH_HEEHEE.mp3"
+	},
+	{
+		"id": 21632,
+		"achievement": "ACH_NERO",
+		"sound" : "ACH_NERO.mp3"
+	},
+	{
+		"id": 20155,
+		"achievement": "ACH_AURELIUS",
+		"sound" : "/"
+	},
+	{
+		"id": 44324,
+		"achievement": "ACH_COMMODUS",
+		"sound" : "/"
+	},
+	{
+		"id": 253043,
+		"achievement": "ACH_SQUIDWARD",
+		"sound" : "ACH_SQUIDWARD.mp3"
+	},
+	{
+		"id": 27159,
+		"achievement": "ACH_SHERLOCK",
+		"sound" : "/"
+	},
+	{
+		"id": 64072,
+		"achievement": "ACH_HOMER",
+		"sound" : "/"
+	},
+	{
+		"id": 18717177,
+		"achievement": "ACH_SHREK",
+		"sound" : "/"
+	},
+	{
+		"id": 786916,
+		"achievement": "ACH_TERMINATOR",
+		"sound" : "/"
+	},
+	{
+		"id": 701741,
+		"achievement": "ACH_THANOS",
+		"sound" : "/"
+	},
+	{
+		"id": 27936,
+		"achievement": "ACH_SPIDERMAN",
+		"sound" : "ACH_SPIDERMAN.mp3"
+	},
+	{
+		"id": 23140032,
+		"achievement": "ACH_FRODO",
+		"sound" : "ACH_SPIDERMAN.mp3"
+	},
+	
+]
