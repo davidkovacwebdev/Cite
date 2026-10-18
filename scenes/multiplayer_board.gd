@@ -16,6 +16,7 @@ const REWARD_SYNC_TIMEOUT_SECONDS := 5.0
 # How long the non-guesser waits for the winner's actual pick - comfortably
 # longer than REWARD_PICK_TIMEOUT_SECONDS so it isn't the one giving up first.
 const CARD_REWARD_WAIT_TIMEOUT_SECONDS := 20.0
+const CHAT_MESSAGE_COLOR := "#ff8a80"
 
 const CardScene = preload("res://scenes/Card.tscn")
 
@@ -79,6 +80,11 @@ func _ready() -> void:
 	MultiplayerSync.card_reward_received.connect(_on_card_reward_received)
 	MultiplayerSync.reward_picker_started.connect(_on_reward_picker_started_signal)
 	MultiplayerSync.reward_none.connect(_on_reward_none_signal)
+	MultiplayerSync.chat_message_added.connect(_add_chat_line)
+	%ChatInput.text_submitted.connect(_on_chat_submitted)
+	# This board is rebuilt every round - replay the match's chat so far.
+	for entry in MultiplayerSync.chat_history:
+		_add_chat_line(entry.name, entry.text)
 
 	# Reset here, once per round, rather than at the moment we start waiting
 	# for them (_wait_for_reward_picker_signal used to do this) - the winner's
@@ -93,7 +99,7 @@ func _ready() -> void:
 	_pending_card_reward_ready = false
 	_pending_card_reward_winner_action = -1
 
-	$RoundCounter.text = "Round: %d" % Global.run.round_number
+	$RoundCounter.text = "Round %d" % Global.run.round_number
 	$ArticleTitleLabel.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
 	$ArticleTitle.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
 	$ArticleTitle.position.y = 40
@@ -189,11 +195,27 @@ func _on_frozen(duration: float) -> void:
 	if not is_inside_tree() or Global.multiplayer_match_over:
 		return  # match already ended and this board's scene is gone - nothing to freeze
 	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav")
+	get_parent().show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 	frozen = true
 	await get_tree().create_timer(duration).timeout
 	if Global.multiplayer_match_over:
 		return
 	frozen = false
+
+
+func _on_chat_submitted(text: String) -> void:
+	MultiplayerSync.send_chat(text)
+	%ChatInput.clear()
+
+
+func _add_chat_line(sender_name: String, text: String) -> void:
+	# Both strings come from other players - escape "[" so they can't inject
+	# BBCode into the log.
+	%ChatLog.append_text("[b]%s:[/b] [color=%s]%s[/color]\n" % [
+		sender_name.replace("[", "[lb]"),
+		CHAT_MESSAGE_COLOR,
+		text.replace("[", "[lb]"),
+	])
 
 
 # "Static" card - opponent scrambled the visual order of our revealed
@@ -204,6 +226,7 @@ func _on_chunks_scrambled(duration: float) -> void:
 	# Played before the size check so the victim still hears the card even
 	# when there's too little revealed text for the scramble to be visible.
 	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav")
+	get_parent().show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
 	var vbox = $ScrollContainer/VBoxContainer
 	var original_order = vbox.get_children()
 	if original_order.size() <= 1:
@@ -295,6 +318,8 @@ func update_board_chunks():
 func _input(event):
 	if not round_started or round_advancing or frozen:
 		return
+	if %ChatInput.has_focus():
+		return  # Enter here sends chat (_on_chat_submitted), not a guess
 	if event is InputEventKey and event.pressed and not event.is_echo() and event.keycode == KEY_ENTER:
 		if Global.run.letter_reveal_armed:
 			var letter = $InputField.text.strip_edges()
@@ -360,7 +385,7 @@ func correct_guess():
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 
-	if not Global.run.last_article and _reward_phase_applies():
+	if not Global.run.last_article:
 		# No point offering a reward right before the match itself ends -
 		# there's no "next round" for it to carry into.
 		await _run_card_reward_choice()
@@ -369,13 +394,6 @@ func correct_guess():
 
 	Global.run.current_round.card_playable = true
 	_advance_round()
-
-
-# Reward picker only runs every other round-win, not every single one. Both clients check
-# the same synced Run.round_number, so they always agree on whether this
-# round gets a reward phase without needing another message to coordinate it.
-func _reward_phase_applies() -> bool:
-	return Global.run.round_number % 2 == 0
 
 
 # Called on the receiving end whenever the winner hands over the reward card
@@ -767,7 +785,7 @@ func _on_opponent_guess_result(correct: bool, damage: int) -> void:
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 
-	if not Global.run.last_article and _reward_phase_applies():
+	if not Global.run.last_article:
 		await _watch_opponent_reward_choice()
 		if Global.multiplayer_match_over or not is_inside_tree():
 			return
@@ -783,7 +801,7 @@ func _advance_round(i_am_winner: bool = true) -> void:
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return  # match already ended (e.g. opponent's match-over RPC beat us here) - scene may be gone
 	Global.run.round_number += 1
-	$RoundCounter.text = "Round: %d" % Global.run.round_number
+	$RoundCounter.text = "Round %d" % Global.run.round_number
 	if Global.run.last_article == true:
 		Global.end_multiplayer_match("won" if i_am_winner else "lost")
 		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")

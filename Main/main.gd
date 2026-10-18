@@ -220,24 +220,11 @@ func _on_host_join_lobby_pressed():
 	get_tree().change_scene_to_file("res://scenes/MultiplayerLobby.tscn")
 
 func _on_lobby_dummy_pressed():
-	# Debug shortcut: skips real Steam lobby/P2P setup entirely and drops
-	# straight into a multiplayer round with a simulated opponent, so the
-	# multiplayer round UI/flow can be tested solo. Uses whatever
-	# Global.multiplayer_playlist_id currently is (default "common_knowledge")
-	# - picking a playlist is only exposed in the real MultiplayerLobby.
+	# Debug: the regular hosting flow, except a local bot (DummyOpponent)
+	# joins instead of a real player - see MultiplayerLobby's dummy_lobby.
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
-	Global.start_new_run()
-	Global.run.current_game_mode = Global.run.GameMode.NORMAL
-	Global.multiplayer_article_seed = randi()
-	Global.is_multiplayer_match = true
-	Global.is_dummy_opponent = true
-	Global.dummy_opponent_hp = Global.DUMMY_TEST_HP
-	Global.dummy_opponent_max_hp = Global.DUMMY_TEST_HP
-	Global.last_known_opponent_hp = Global.DUMMY_TEST_HP
-	Global.last_known_opponent_max_hp = Global.DUMMY_TEST_HP
-	Global.multiplayer_opponent_id = 0
-	Global.multiplayer_opponent_name = "Dummy Bot"
-	get_tree().change_scene_to_file("res://scenes/Round.tscn")
+	Global.multiplayer_lobby_entry = "dummy"
+	get_tree().change_scene_to_file("res://scenes/MultiplayerLobby.tscn")
 
 func _on_hardcore_mode_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")

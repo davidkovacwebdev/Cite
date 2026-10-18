@@ -3,7 +3,6 @@ extends Node2D
 class_name ManaComponent
 
 @export var is_display_only: bool = false
-@export var mirror_bar: bool = false
 
 var max_mana:int
 var current_mana:int
@@ -12,7 +11,6 @@ var combo_modifier:int = 0
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	_apply_skin()
-	_apply_layout()
 	if Global.is_multiplayer_match:
 		visible = false  # multiplayer doesn't use mana at all - no card spends it
 	if is_display_only:
@@ -37,17 +35,6 @@ func _ready() -> void:
 func _apply_skin() -> void:
 	$MinimalSkin.visible = Global.is_multiplayer_match
 	$ClassicSkin.visible = not Global.is_multiplayer_match
-
-
-# For the opponent's panel, the avatar sits to the right of the bar instead
-# of the left, so the bar itself has to hug the opposite edge.
-func _apply_layout() -> void:
-	if not mirror_bar:
-		return
-	for node in [$MinimalSkin/Track, $MinimalSkin/Fill, $MinimalSkin/Label]:
-		var width = node.offset_right - node.offset_left
-		node.offset_left = 0.0
-		node.offset_right = width
 
 
 func set_display_vitals(mana: int, mana_max: int) -> void:

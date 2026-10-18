@@ -100,22 +100,23 @@ position = Vector2(175, 550)
 
 [node name="SelfAvatar" type="TextureRect" parent="."]
 unique_name_in_owner = true
-offset_left = 5.0
-offset_top = -2.0
-offset_right = 69.0
-offset_bottom = 62.0
+offset_left = 8.0
+offset_top = 56.0
+offset_right = 56.0
+offset_bottom = 104.0
 expand_mode = 1
 stretch_mode = 5
 visible = false
 
 [node name="SelfNameLabel" type="Label" parent="."]
 unique_name_in_owner = true
-offset_left = 5.0
-offset_top = 64.0
-offset_right = 69.0
-offset_bottom = 86.0
-horizontal_alignment = 1
+offset_left = 64.0
+offset_top = 56.0
+offset_right = 254.0
+offset_bottom = 104.0
+theme_override_font_sizes/font_size = 18
 vertical_alignment = 1
+text_overrun_behavior = 3
 visible = false
 
 [node name="BigBanner" type="RichTextLabel" parent="."]
@@ -131,6 +132,21 @@ theme_override_colors/default_color = Color(0.75, 0.08, 0.08, 1)
 theme_override_font_sizes/normal_font_size = 56
 bbcode_enabled = true
 text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+modulate = Color(1, 1, 1, 0)
+
+[node name="StatusOverlay" type="Label" parent="."]
+unique_name_in_owner = true
+z_index = 101
+offset_top = 230.0
+offset_right = 1152.0
+offset_bottom = 350.0
+pivot_offset = Vector2(576, 60)
+mouse_filter = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 84
 horizontal_alignment = 1
 vertical_alignment = 1
 modulate = Color(1, 1, 1, 0)

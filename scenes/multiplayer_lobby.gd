@@ -33,8 +33,16 @@ const MSG_PASSWORD := "pw"
 const MSG_KICK := "kick"
 const MSG_PLAYLIST_READY := "plready"  # guest -> host, payload = guest's playlist hash
 
-const HOST_CHAT_COLOR := "#3b4fd8"
-const GUEST_CHAT_COLOR := "#c2410c"
+const HOST_CHAT_COLOR := "#8b9cff"
+const GUEST_CHAT_COLOR := "#fb923c"
+
+# Dummy lobby (Global.multiplayer_lobby_entry == "dummy"): the regular host
+# flow, but entirely local - no Steam lobby is created, and the guest is a
+# bot that joins after a moment and chats. These ids stand in for the lobby
+# and bot Steam IDs - real ones are never this small.
+const DUMMY_LOBBY_ID := 1
+const DUMMY_GUEST_ID := 1
+const DUMMY_JOIN_DELAY_SECONDS := 2.0
 
 enum Visibility { PUBLIC, PRIVATE }
 
@@ -72,6 +80,9 @@ var pending_password: String = ""
 var password_prompt_lobby_id: int = 0
 
 var browser_refresh_timer: Timer
+
+var dummy_lobby: bool = false
+var dummy_chat_timer: Timer
 
 # Host: hash of the playlist the guest last said it has ready. Play only
 # unlocks once it matches the host's own.
@@ -143,13 +154,21 @@ func _ready() -> void:
 	browser_refresh_timer.timeout.connect(_request_lobby_list)
 	add_child(browser_refresh_timer)
 
+	dummy_lobby = Global.multiplayer_lobby_entry == "dummy"
+	dummy_chat_timer = Timer.new()
+	dummy_chat_timer.wait_time = DummyOpponent.CHAT_INTERVAL_SECONDS
+	dummy_chat_timer.timeout.connect(func(): _add_player_chat(DUMMY_GUEST_ID, DummyOpponent.random_chat_line()))
+	add_child(dummy_chat_timer)
+
 	_show_entry_screen()
 
 
 # --- Screens ---------------------------------------------------------------
 
 func _show_entry_screen(message: String = "") -> void:
-	if Global.multiplayer_lobby_entry == "browse":
+	if dummy_lobby:
+		_show_host_form()
+	elif Global.multiplayer_lobby_entry == "browse":
 		_show_browser()
 	else:
 		_show_choice_state()
@@ -184,6 +203,12 @@ func _show_host_form() -> void:
 	%PasswordInput.clear()
 	_on_visibility_selected(%VisibilityPicker.selected)
 	%GameNameInput.grab_focus()
+	if dummy_lobby:
+		# Always private, so visibility/password don't apply.
+		%VisibilityPicker.visible = false
+		%PasswordInput.visible = false
+		_set_status("Dummy game - a bot joins once it's created. The game name needs at least %d characters." % MIN_GAME_NAME_LENGTH)
+		return
 	_set_status("Set up your game. The game name needs at least %d characters." % MIN_GAME_NAME_LENGTH)
 
 
@@ -224,7 +249,7 @@ func _set_status(text: String) -> void:
 func _on_back_pressed() -> void:
 	if Workshop.is_uploading:
 		return
-	if %ChoicePanel.visible:
+	if %ChoicePanel.visible or (dummy_lobby and %HostForm.visible):
 		_go_to_main_menu()
 	else:
 		_show_entry_screen()
@@ -360,6 +385,9 @@ func _on_create_pressed() -> void:
 	host_password = %PasswordInput.text if is_public else ""
 	Global.multiplayer_playlist_id = %PlaylistPicker.get_selected_id()
 
+	if dummy_lobby:
+		_create_dummy_lobby()
+		return
 	%CreateButton.disabled = true
 	_set_status("Creating game...")
 	Steam.createLobby(Steam.LOBBY_TYPE_PUBLIC if is_public else Steam.LOBBY_TYPE_PRIVATE, 2)
@@ -411,6 +439,38 @@ func _on_guest_entered(member_id: int) -> void:
 	else:
 		get_tree().create_timer(PASSWORD_CHECK_TIMEOUT_SECONDS).timeout.connect(_on_password_check_timeout.bind(member_id))
 	_update_room()
+
+
+func _create_dummy_lobby() -> void:
+	lobby_id = DUMMY_LOBBY_ID
+	is_host = true
+	host_id = Steam.getSteamID()
+	guest_id = 0
+	guest_verified = false
+	%PlaylistList.select(Global.multiplayer_playlist_id)
+	%ChatLog.clear()
+	_show_room()
+	_set_status("Waiting for the bot to join...")
+	get_tree().create_timer(DUMMY_JOIN_DELAY_SECONDS).timeout.connect(_on_dummy_guest_joined)
+
+
+func _on_dummy_guest_joined() -> void:
+	if lobby_id != DUMMY_LOBBY_ID or guest_id != 0:
+		return  # host left before the bot showed up
+	guest_id = DUMMY_GUEST_ID
+	guest_verified = true
+	_add_system_chat("%s joined." % _member_name(guest_id))
+	_set_status("")
+	dummy_chat_timer.start()
+	_update_room()
+
+
+func _member_name(steam_id: int) -> String:
+	if dummy_lobby and steam_id == DUMMY_GUEST_ID:
+		return DummyOpponent.BOT_NAME
+	if steam_id == Steam.getSteamID():
+		return Global.get_own_name()  # the friends lookup isn't reliable for yourself
+	return Steam.getFriendPersonaName(steam_id)
 
 
 func _on_guest_left() -> void:
@@ -515,9 +575,10 @@ func _on_host_left() -> void:
 
 
 func _leave_lobby() -> void:
-	if lobby_id != 0:
+	if lobby_id != 0 and not dummy_lobby:
 		Steam.leaveLobby(lobby_id)
 	lobby_id = 0
+	dummy_chat_timer.stop()
 	is_host = false
 	host_id = 0
 	guest_id = 0
@@ -674,8 +735,9 @@ func _show_room() -> void:
 
 
 func _update_room() -> void:
-	var host_name = Steam.getFriendPersonaName(host_id)
-	%RoomTitle.text = "%s's game - %s" % [host_name, Steam.getLobbyData(lobby_id, TITLE_LOBBY_KEY)]
+	var host_name = _member_name(host_id)
+	var title = host_game_name if dummy_lobby else Steam.getLobbyData(lobby_id, TITLE_LOBBY_KEY)
+	%RoomTitle.text = "%s's game - %s" % [host_name, title]
 
 	%HostName.text = host_name
 	_load_avatar(host_id, %HostAvatar)
@@ -685,6 +747,9 @@ func _update_room() -> void:
 		%GuestAvatar.texture = null
 	elif is_host and not guest_verified:
 		%GuestName.text = "Checking password..."
+		%GuestAvatar.texture = null
+	elif dummy_lobby:
+		%GuestName.text = _member_name(guest_id)
 		%GuestAvatar.texture = null
 	else:
 		%GuestName.text = Steam.getFriendPersonaName(guest_id)
@@ -699,13 +764,15 @@ func _update_room() -> void:
 
 	%PlayButton.visible = is_host
 	_update_play_button()
-	%InviteButton.visible = is_host
-	%CopyCodeButton.visible = is_host
+	%InviteButton.visible = is_host and not dummy_lobby
+	%CopyCodeButton.visible = is_host and not dummy_lobby
 
 
 func _update_play_button() -> void:
 	if not is_host:
 		return
+	if dummy_lobby and guest_id != 0:
+		guest_playlist_hash = _selected_playlist_hash()  # the bot has every playlist
 	var guest_ready = guest_id != 0 and guest_verified
 	var playlist_matches = not guest_playlist_hash.is_empty() and guest_playlist_hash == _selected_playlist_hash()
 	%PlayButton.disabled = not guest_ready or not playlist_matches or match_starting
@@ -731,6 +798,10 @@ func _send_chat() -> void:
 	var text = %ChatInput.text.strip_edges().left(MAX_CHAT_LENGTH)
 	if text.is_empty() or lobby_id == 0:
 		return
+	if dummy_lobby:
+		_add_player_chat(host_id, text)  # no Steam lobby to echo it back
+		%ChatInput.clear()
+		return
 	# Steam echoes lobby chat back to the sender too, so the message is added
 	# to the log when it arrives in _on_lobby_message, not here.
 	_send_lobby_message(MSG_CHAT, text)
@@ -741,7 +812,7 @@ func _add_player_chat(user: int, text: String) -> void:
 	var color = HOST_CHAT_COLOR if user == host_id else GUEST_CHAT_COLOR
 	%ChatLog.append_text("[color=%s][b]%s:[/b][/color] %s\n" % [
 		color,
-		_escape_bbcode(Steam.getFriendPersonaName(user)),
+		_escape_bbcode(_member_name(user)),
 		_escape_bbcode(text.left(MAX_CHAT_LENGTH)),
 	])
 
@@ -816,6 +887,9 @@ func _sync_playlist_to_lobby() -> void:
 
 # Host: everything the guest needs to show, fetch and verify the playlist.
 func _publish_playlist(playlist_id: String) -> void:
+	if dummy_lobby:
+		_update_play_button()
+		return
 	var version = 0
 	if Workshop.is_community_id(playlist_id):
 		version = Workshop.get_time_updated(Workshop.file_id_of(playlist_id))
@@ -932,6 +1006,9 @@ func _on_play_pressed() -> void:
 	if not is_host or match_starting or guest_id == 0 or not guest_verified:
 		return
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
+	if dummy_lobby:
+		_start_dummy_match()
+		return
 	match_starting = true
 	%PlayButton.disabled = true
 
@@ -954,6 +1031,29 @@ func _on_play_pressed() -> void:
 	MultiplayerSync.connection_failed.connect(_on_connection_failed_signal, CONNECT_ONE_SHOT)
 	MultiplayerSync.start_as_host(guest_id)
 	_start_connection_timeout()
+
+
+# No opponent to hand the seed to or handshake with - drop the Steam lobby
+# and go straight in, with DummyOpponent (added by Round) playing the guest.
+func _start_dummy_match() -> void:
+	var playlist_id = %PlaylistList.get_selected_id()
+	if not playlist_id.is_empty():
+		Global.multiplayer_playlist_id = playlist_id
+	_leave_lobby()
+
+	Global.start_new_run()
+	Global.run.current_game_mode = Global.run.GameMode.NORMAL
+	Global.multiplayer_article_seed = randi()
+	Global.is_multiplayer_match = true
+	Global.is_dummy_opponent = true
+	Global.dummy_opponent_hp = Global.DUMMY_TEST_HP
+	Global.dummy_opponent_max_hp = Global.DUMMY_TEST_HP
+	Global.last_known_opponent_hp = Global.DUMMY_TEST_HP
+	Global.last_known_opponent_max_hp = Global.DUMMY_TEST_HP
+	Global.multiplayer_opponent_id = 0
+	Global.multiplayer_opponent_name = DummyOpponent.BOT_NAME
+	MultiplayerSync.chat_history.clear()
+	get_tree().change_scene_to_file("res://scenes/Round.tscn")
 
 
 func _on_host_connected() -> void:

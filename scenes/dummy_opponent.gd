@@ -5,6 +5,28 @@ extends Node
 # board.gd's multiplayer branches can be tested without a second Steam account.
 class_name DummyOpponent
 
+const BOT_NAME := "Dummy Bot"
+# The bot also chats - in the dummy lobby (MultiplayerLobby) and in-match
+# (here) - so the chat UI can be tested solo.
+const CHAT_INTERVAL_SECONDS := 5.0
+const CHAT_LINES := [
+	"gl hf",
+	"hmm...",
+	"I know this one!",
+	"wait what",
+	"this article is so random",
+	"no way",
+	"lol",
+	"is it a city?",
+	"too easy",
+	"I'm only a bot, go easy on me",
+	"ugh, so close",
+	"who even writes these",
+	"nice one",
+	"I swear I've read this before",
+	"brb",
+]
+
 var mana: int = 100
 var max_mana: int = 100
 
@@ -12,6 +34,16 @@ var max_mana: int = 100
 func _ready() -> void:
 	MultiplayerSync.dummy_damage_taken.connect(_on_damage_taken)
 	_broadcast_vitals()
+
+	var chat_timer = Timer.new()
+	chat_timer.wait_time = CHAT_INTERVAL_SECONDS
+	chat_timer.timeout.connect(func(): MultiplayerSync.receive_dummy_chat(random_chat_line()))
+	add_child(chat_timer)
+	chat_timer.start()
+
+
+static func random_chat_line() -> String:
+	return CHAT_LINES.pick_random()
 
 
 # The dummy doesn't act on its own for now - it just sits there with full

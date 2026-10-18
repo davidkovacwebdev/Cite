@@ -17,8 +17,8 @@ func _on_load_pressed() -> void:
 		%StatusLabel.text = "Enter a numeric Wikipedia page ID."
 		return
 
-	# Same solo-vs-dummy-opponent shortcut Main._on_lobby_dummy_pressed() uses
-	# (skips real Steam lobby/P2P setup), just aimed at one forced article ID
+	# Same solo-vs-dummy-opponent setup MultiplayerLobby._start_dummy_match()
+	# uses (no real opponent or P2P connection), just aimed at one forced article ID
 	# via Global.debug_forced_article_id instead of the normal shuffled
 	# mp_ck.json pool - so a candidate ID can be checked in the actual
 	# multiplayer board/UI without needing a second player for every article.
@@ -28,7 +28,7 @@ func _on_load_pressed() -> void:
 	Global.is_multiplayer_match = true
 	Global.is_dummy_opponent = true
 	Global.multiplayer_opponent_id = 0
-	Global.multiplayer_opponent_name = "Dummy Bot"
+	Global.multiplayer_opponent_name = DummyOpponent.BOT_NAME
 	Global.debug_forced_article_id = text.to_int()
 	get_tree().change_scene_to_file("res://scenes/Round.tscn")
 

@@ -2,6 +2,9 @@ extends Node2D
 
 class_name Round
 
+const FROZEN_STATUS_COLOR := Color(0.62, 0.86, 1.0)
+const SCRAMBLED_STATUS_COLOR := Color(1.0, 0.78, 0.36)
+
 var current_id
 var article_chunks
 var article_title
@@ -42,6 +45,7 @@ func _ready() -> void:
 	if Global.is_multiplayer_match:
 		$CategoryReveal/Area2D.input_pickable = false
 		$DifficultyReveal/Area2D.input_pickable = false
+		$Control.position = Vector2(8, 8)  # health bar hugs the top-left edge, avatar + name below it
 		%SelfAvatar.visible = true
 		%SelfNameLabel.visible = true
 		_setup_self_identity()
@@ -121,6 +125,27 @@ func show_banner(text: String) -> void:
 	tween.tween_property(banner, "modulate:a", 0.0, 0.5)
 	
 	
+# Big see-through text over the middle of the screen for a card effect
+# (Freeze, Static) - pops in, holds, then drifts up as it fades out.
+func show_status(text: String, color: Color = Color.WHITE) -> void:
+	var label = %StatusOverlay
+	if label.has_meta("tween"):
+		label.get_meta("tween").kill()
+	label.text = text
+	label.add_theme_color_override("font_color", color)
+	label.modulate.a = 0.0
+	label.scale = Vector2(1.25, 1.25)
+	label.position.y = 230.0
+	var tween = create_tween()
+	label.set_meta("tween", tween)
+	tween.set_parallel(true)
+	tween.tween_property(label, "modulate:a", 0.8, 0.2)
+	tween.tween_property(label, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain().tween_interval(1.0)
+	tween.chain().tween_property(label, "modulate:a", 0.0, 0.8)
+	tween.parallel().tween_property(label, "position:y", 200.0, 0.8).set_ease(Tween.EASE_IN)
+
+
 func create_skip_icons():
 	if Global.is_multiplayer_match:
 		return
@@ -138,7 +163,7 @@ func create_skip_icons():
 
 func _setup_self_identity() -> void:
 	var steam_id = Steam.getSteamID()
-	%SelfNameLabel.text = Steam.getFriendPersonaName(steam_id)
+	%SelfNameLabel.text = Global.get_own_name()
 	var handle = Steam.getMediumFriendAvatar(steam_id)
 	if handle > 0:
 		_apply_self_avatar_handle(handle)

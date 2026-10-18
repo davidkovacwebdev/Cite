@@ -330,6 +330,12 @@ func start_new_run():
 
 #Steam handling
 
+# Your own Steam name - "You" when Steam isn't running/logged in (then
+# getPersonaName() returns an empty string), so chat never shows a blank name.
+func get_own_name() -> String:
+	var own_name = Steam.getPersonaName()
+	return own_name if not own_name.is_empty() else "You"
+
 func _init ():
 	var response : Dictionary = Steam.steamInitEx(4339350, true)
 	print(response)

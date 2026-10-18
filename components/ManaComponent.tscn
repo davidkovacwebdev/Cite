@@ -48,24 +48,21 @@ texture = ExtResource("2_utvb8")
 
 [node name="Track" type="ColorRect" parent="MinimalSkin"]
 material = SubResource("ShaderMaterial_track")
-offset_left = 68.0
 offset_top = 40.0
-offset_right = 314.0
+offset_right = 246.0
 offset_bottom = 68.0
 color = Color(1, 1, 1, 1)
 
 [node name="Fill" type="ColorRect" parent="MinimalSkin"]
 material = SubResource("ShaderMaterial_fill")
-offset_left = 68.0
 offset_top = 40.0
-offset_right = 314.0
+offset_right = 246.0
 offset_bottom = 68.0
 color = Color(1, 1, 1, 1)
 
 [node name="Label" type="RichTextLabel" parent="MinimalSkin"]
-offset_left = 68.0
 offset_top = 40.0
-offset_right = 314.0
+offset_right = 246.0
 offset_bottom = 68.0
 theme_override_colors/default_color = Color(1, 1, 1, 1)
 theme_override_fonts/normal_font = ExtResource("4_font")

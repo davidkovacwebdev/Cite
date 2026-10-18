@@ -14,6 +14,10 @@ signal card_reward_received(winner_action: int, loser_action: int)
 signal reward_picker_started(key_a: String, key_b: String)
 signal reward_none
 
+# In-match chat (MultiplayerBoard's ChatPanel). The board is rebuilt every
+# round, so the history lives here instead and the board replays it on load.
+signal chat_message_added(sender_name: String, text: String)
+
 # Fired by MultiplayerLobby's own handshake (see start_as_host/start_as_guest
 # below) once both sides have confirmed a working message channel, and on
 # failure/disconnect respectively. Replaces Godot's peer_connected/
@@ -24,9 +28,12 @@ signal connection_failed
 
 const CHANNEL := 0
 const MAX_MESSAGES_PER_POLL := 16
+const MAX_CHAT_LENGTH := 200
+const MAX_CHAT_HISTORY := 100
 
 var _opponent_id: int = 0
 var _connected: bool = false
+var chat_history: Array = []  # [{"name": String, "text": String}]
 
 
 func _ready() -> void:
@@ -97,6 +104,8 @@ func _handle_message(msg: Dictionary) -> void:
 			reward_picker_started.emit(msg.key_a, msg.key_b)
 		"reward_none":
 			reward_none.emit()
+		"chat":
+			_add_chat(Global.multiplayer_opponent_name, str(msg.get("text", "")))
 		"player_left":
 			_on_opponent_left()
 
@@ -115,6 +124,7 @@ func _send_raw(payload: Dictionary) -> void:
 func start_as_host(opponent_steam_id: int) -> void:
 	_connected = false
 	_opponent_id = opponent_steam_id
+	chat_history.clear()
 	_send_raw({"type": "hello"})
 
 
@@ -125,6 +135,7 @@ func start_as_host(opponent_steam_id: int) -> void:
 func start_as_guest(opponent_steam_id: int) -> void:
 	_connected = false
 	_opponent_id = opponent_steam_id
+	chat_history.clear()
 
 
 func reset_connection() -> void:
@@ -132,6 +143,7 @@ func reset_connection() -> void:
 		Steam.closeSessionWithUser(_opponent_id)
 	_opponent_id = 0
 	_connected = false
+	chat_history.clear()
 
 
 func _is_connected() -> bool:
@@ -201,6 +213,34 @@ func send_match_over(opponent_outcome: String) -> void:
 	if not _is_connected():
 		return
 	_send_raw({"type": "match_over", "outcome": opponent_outcome})
+
+
+# Our own message goes straight into the history - unlike lobby chat, Steam
+# doesn't echo P2P messages back to the sender. In dummy mode it just stays
+# local.
+func send_chat(text: String) -> void:
+	text = text.strip_edges().left(MAX_CHAT_LENGTH)
+	if text.is_empty():
+		return
+	_add_chat(Global.get_own_name(), text)
+	if Global.is_dummy_opponent or not _is_connected():
+		return
+	_send_raw({"type": "chat", "text": text})
+
+
+# DummyOpponent's stand-in for a real opponent's "chat" message.
+func receive_dummy_chat(text: String) -> void:
+	_add_chat(Global.multiplayer_opponent_name, text)
+
+
+func _add_chat(sender_name: String, text: String) -> void:
+	text = text.strip_edges().left(MAX_CHAT_LENGTH)
+	if text.is_empty():
+		return
+	chat_history.append({"name": sender_name, "text": text})
+	if chat_history.size() > MAX_CHAT_HISTORY:
+		chat_history.pop_front()
+	chat_message_added.emit(sender_name, text)
 
 
 # Explicit "I'm quitting" notice, sent when the game window is closed mid-

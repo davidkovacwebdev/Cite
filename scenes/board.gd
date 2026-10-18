@@ -13,7 +13,7 @@ func _ready() -> void:
 	Global.run.current_round.article_title_length = get_title_count(Global.run.current_round.article_title)
 	Global.run.current_round.vowels_revealed = false
 
-	$RoundCounter.text = "Round: %d" % Global.run.round_number
+	$RoundCounter.text = "Round %d" % Global.run.round_number
 	$ArticleTitleLabel.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
 	$ArticleTitle.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
 	$ArticleTitle.position.y = 40
@@ -124,7 +124,7 @@ func correct_guess():
 
 func _advance_round() -> void:
 	Global.run.round_number += 1
-	$RoundCounter.text = "Round: %d" % Global.run.round_number
+	$RoundCounter.text = "Round %d" % Global.run.round_number
 	if Global.run.last_article == true:
 		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
 	else:

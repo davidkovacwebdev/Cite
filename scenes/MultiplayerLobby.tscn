@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scenes/multiplayer_lobby.gd" id="1"]
 [ext_resource type="Script" path="res://scenes/playlist_selector.gd" id="4"]
@@ -15,6 +15,24 @@ fill_to = Vector2(0, 1)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_u2i7p"]
 shader = ExtResource("2")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_chatlog"]
+bg_color = Color(0.067, 0.071, 0.086, 0.85)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.247, 0.259, 0.286, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+shadow_color = Color(0, 0, 0, 0.25)
+shadow_size = 4
 
 [node name="MultiplayerLobby" type="Control"]
 layout_mode = 3
@@ -408,9 +426,11 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 140)
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_colors/default_color = Color(0.93, 0.94, 0.96, 1)
 theme_override_font_sizes/normal_font_size = 16
 theme_override_font_sizes/bold_font_size = 16
 theme_override_font_sizes/italics_font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_chatlog")
 bbcode_enabled = true
 scroll_following = true
 selection_enabled = true
