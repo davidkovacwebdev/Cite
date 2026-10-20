@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scenes/multiplayer_lobby.gd" id="1"]
 [ext_resource type="Script" path="res://scenes/playlist_selector.gd" id="4"]
@@ -33,6 +33,42 @@ content_margin_right = 12.0
 content_margin_bottom = 8.0
 shadow_color = Color(0, 0, 0, 0.25)
 shadow_size = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_table"]
+bg_color = Color(0.067, 0.071, 0.086, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.247, 0.259, 0.286, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+shadow_color = Color(0, 0, 0, 0.25)
+shadow_size = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_avatar"]
+bg_color = Color(0.106, 0.114, 0.141, 1)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.62, 0.36, 0.95, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+shadow_color = Color(0.62, 0.36, 0.95, 0.45)
+shadow_size = 10
 
 [node name="MultiplayerLobby" type="Control"]
 layout_mode = 3
@@ -84,6 +120,8 @@ alignment = 1
 
 [node name="Title" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 36
 text = "Multiplayer"
 fit_content = true
@@ -94,6 +132,8 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 18
 text = ""
 fit_content = true
@@ -124,34 +164,54 @@ text = "Submit Playlist to Workshop"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HostColumns" type="HBoxContainer" parent="CenterContainer/VBoxContainer/HostForm"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="PlaylistPicker" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm/HostColumns"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(440, 330)
+layout_mode = 2
+script = ExtResource("4")
+
+[node name="HostOptions" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm/HostColumns"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="GameNameInput" type="LineEdit" parent="CenterContainer/VBoxContainer/HostForm"]
+[node name="GameNameInput" type="LineEdit" parent="CenterContainer/VBoxContainer/HostForm/HostColumns/HostOptions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 placeholder_text = "Game name"
 max_length = 40
 
-[node name="PlaylistPicker" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(460, 340)
-layout_mode = 2
-script = ExtResource("4")
-
-[node name="VisibilityPicker" type="OptionButton" parent="CenterContainer/VBoxContainer/HostForm"]
+[node name="VisibilityPicker" type="OptionButton" parent="CenterContainer/VBoxContainer/HostForm/HostColumns/HostOptions"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="PasswordInput" type="LineEdit" parent="CenterContainer/VBoxContainer/HostForm"]
+[node name="PasswordInput" type="LineEdit" parent="CenterContainer/VBoxContainer/HostForm/HostColumns/HostOptions"]
 unique_name_in_owner = true
 layout_mode = 2
 placeholder_text = "Password (optional)"
 max_length = 32
 secret = true
 
-[node name="CreateButton" type="Button" parent="CenterContainer/VBoxContainer/HostForm"]
+[node name="HostButtons" type="HBoxContainer" parent="CenterContainer/VBoxContainer/HostForm"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="HostBackButton" type="Button" parent="CenterContainer/VBoxContainer/HostForm/HostButtons"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+text = "Back"
+
+[node name="CreateButton" type="Button" parent="CenterContainer/VBoxContainer/HostForm/HostButtons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
 text = "Create Game"
 
@@ -291,6 +351,8 @@ theme_override_constants/separation = 16
 
 [node name="BrowserTitle" type="RichTextLabel" parent="BrowserContainer"]
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 36
 text = "Find / Host a Game"
 fit_content = true
@@ -300,31 +362,68 @@ horizontal_alignment = 1
 [node name="BrowserStatus" type="RichTextLabel" parent="BrowserContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 18
 text = ""
 fit_content = true
 autowrap_mode = 2
 horizontal_alignment = 1
 
-[node name="BrowserEmptyLabel" type="Label" parent="BrowserContainer"]
-unique_name_in_owner = true
-visible = false
+[node name="BrowserFilters" type="HBoxContainer" parent="BrowserContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "No games are being hosted right now. Host one below!"
-horizontal_alignment = 1
-autowrap_mode = 2
+theme_override_constants/separation = 12
 
-[node name="LobbyScroll" type="ScrollContainer" parent="BrowserContainer"]
+[node name="BrowserSearch" type="LineEdit" parent="BrowserContainer/BrowserFilters"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Search by game, host or playlist..."
+clear_button_enabled = true
+
+[node name="BrowserPlaylistFilter" type="OptionButton" parent="BrowserContainer/BrowserFilters"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+
+[node name="LobbyTablePanel" type="PanelContainer" parent="BrowserContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_table")
+
+[node name="LobbyTable" type="VBoxContainer" parent="BrowserContainer/LobbyTablePanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LobbyHeader" type="HBoxContainer" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HSeparator" type="HSeparator" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
+layout_mode = 2
+
+[node name="LobbyScroll" type="ScrollContainer" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="LobbyRows" type="VBoxContainer" parent="BrowserContainer/LobbyScroll"]
+[node name="LobbyRows" type="VBoxContainer" parent="BrowserContainer/LobbyTablePanel/LobbyTable/LobbyScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 4
+
+[node name="BrowserEmptyLabel" type="Label" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 6
+theme_override_colors/font_color = Color(0.7, 0.72, 0.78, 1)
+theme_override_font_sizes/font_size = 20
+text = "No games are being hosted right now. Host one below!"
+horizontal_alignment = 1
+autowrap_mode = 2
 
 [node name="BrowserActions" type="HBoxContainer" parent="BrowserContainer"]
 layout_mode = 2
@@ -380,6 +479,8 @@ theme_override_constants/separation = 10
 [node name="RoomTitle" type="Label" parent="RoomContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 28
 horizontal_alignment = 1
 text_overrun_behavior = 3
@@ -387,6 +488,8 @@ text_overrun_behavior = 3
 [node name="RoomStatus" type="RichTextLabel" parent="RoomContainer"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 18
 text = ""
 fit_content = true
@@ -403,11 +506,15 @@ layout_mode = 2
 size_flags_vertical = 4
 alignment = 1
 
-[node name="HostAvatar" type="TextureRect" parent="RoomContainer/RoomColumns/HostPanel"]
+[node name="HostAvatarFrame" type="PanelContainer" parent="RoomContainer/RoomColumns/HostPanel"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_avatar")
+
+[node name="HostAvatar" type="TextureRect" parent="RoomContainer/RoomColumns/HostPanel/HostAvatarFrame"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(128, 128)
 layout_mode = 2
-size_flags_horizontal = 4
 expand_mode = 1
 stretch_mode = 5
 
@@ -415,6 +522,8 @@ stretch_mode = 5
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 20
 text = "Host"
 horizontal_alignment = 1
@@ -427,6 +536,8 @@ theme_override_constants/separation = 10
 
 [node name="CategoriesTitle" type="RichTextLabel" parent="RoomContainer/RoomColumns/MiddlePanel"]
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/normal_font_size = 20
 text = "Playlist"
 fit_content = true
@@ -501,11 +612,15 @@ layout_mode = 2
 size_flags_vertical = 4
 alignment = 1
 
-[node name="GuestAvatar" type="TextureRect" parent="RoomContainer/RoomColumns/GuestPanel"]
+[node name="GuestAvatarFrame" type="PanelContainer" parent="RoomContainer/RoomColumns/GuestPanel"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_avatar")
+
+[node name="GuestAvatar" type="TextureRect" parent="RoomContainer/RoomColumns/GuestPanel/GuestAvatarFrame"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(128, 128)
 layout_mode = 2
-size_flags_horizontal = 4
 expand_mode = 1
 stretch_mode = 5
 
@@ -513,6 +628,8 @@ stretch_mode = 5
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 20
 text = "Guest"
 horizontal_alignment = 1

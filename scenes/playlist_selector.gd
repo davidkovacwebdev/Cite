@@ -185,6 +185,7 @@ func _make_header(text: String) -> Label:
 	var label = Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 20)
+	_add_outline(label)
 	return label
 
 
@@ -193,7 +194,14 @@ func _make_note(text: String) -> Label:
 	label.text = text
 	label.modulate = Color(1, 1, 1, 0.6)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_add_outline(label)
 	return label
+
+
+# Headers and notes sit straight on the lobby's light background.
+func _add_outline(label: Label) -> void:
+	label.add_theme_color_override("font_outline_color", Color(0.067, 0.071, 0.086))
+	label.add_theme_constant_override("outline_size", 6)
 
 
 func _on_row_pressed(playlist_id: String) -> void:

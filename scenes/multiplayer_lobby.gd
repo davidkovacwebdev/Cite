@@ -35,6 +35,14 @@ const MSG_PLAYLIST_READY := "plready"  # guest -> host, payload = guest's playli
 
 const HOST_CHAT_COLOR := "#8b9cff"
 const GUEST_CHAT_COLOR := "#fb923c"
+# Find / Host a Game table: column titles and their width ratios, shared by
+# the header and every row so they line up. The Join button column is fixed.
+const LOBBY_COLUMNS := [["Game", 3.0], ["Host", 2.0], ["Playlist", 2.5], ["Access", 1.2]]
+const LOBBY_JOIN_COLUMN_WIDTH := 100
+const LOBBY_ROW_COLORS := [Color(0.106, 0.114, 0.141, 1), Color(0.13, 0.138, 0.168, 1)]
+const LOBBY_HEADER_COLOR := Color(0.62, 0.64, 0.7)
+const LOBBY_LOCKED_COLOR := Color(1.0, 0.78, 0.36)
+const LOBBY_OPEN_COLOR := Color(0.49, 0.88, 0.63)
 
 # Dummy lobby (Global.multiplayer_lobby_entry == "dummy"): the regular host
 # flow, but entirely local - no Steam lobby is created, and the guest is a
@@ -80,6 +88,9 @@ var pending_password: String = ""
 var password_prompt_lobby_id: int = 0
 
 var browser_refresh_timer: Timer
+# Last lobby list from Steam - kept so the search box and playlist filter can
+# re-filter it without waiting for the next refresh.
+var browser_lobby_ids: Array = []
 
 var dummy_lobby: bool = false
 var dummy_chat_timer: Timer
@@ -131,6 +142,10 @@ func _ready() -> void:
 	%RoomBackButton.pressed.connect(_on_room_back_pressed)
 	%PlayButton.pressed.connect(_on_play_pressed)
 	%RefreshButton.pressed.connect(_on_refresh_pressed)
+	%BrowserSearch.text_changed.connect(func(_text): _rebuild_lobby_rows())
+	%BrowserPlaylistFilter.item_selected.connect(func(_index): _rebuild_lobby_rows())
+	%HostBackButton.pressed.connect(_on_back_pressed)
+	_build_lobby_header()
 	%BrowserHostButton.pressed.connect(_on_host_pressed)
 	%BrowserJoinButton.pressed.connect(_on_join_pressed)
 	%BrowserBackButton.pressed.connect(_go_to_main_menu)
@@ -194,6 +209,8 @@ func _show_center_panel(panel: Control) -> void:
 	_show_screen(%CenterContainer)
 	for candidate in [%ChoicePanel, %HostForm, %CodePanel, %PasswordPanel, %SubmitPanel]:
 		candidate.visible = candidate == panel
+	# The host form is tall enough that it carries its own Back next to Create.
+	%BackButton.visible = panel != %HostForm
 
 
 func _show_choice_state() -> void:
@@ -261,8 +278,10 @@ func _on_back_pressed() -> void:
 		_show_entry_screen()
 
 
+# Back to Main's Multiplayer submenu, where every way into this scene starts.
 func _go_to_main_menu() -> void:
 	_leave_lobby()
+	Global.return_to_multiplayer_menu = true
 	get_tree().change_scene_to_file("res://Main/Main.tscn")
 
 
@@ -687,42 +706,116 @@ func _request_lobby_list() -> void:
 func _on_lobby_match_list(lobbies: Array) -> void:
 	if not %BrowserContainer.visible:
 		return
+	browser_lobby_ids = lobbies
+	_rebuild_lobby_rows()
+
+
+func _rebuild_lobby_rows() -> void:
 	for row in %LobbyRows.get_children():
 		row.queue_free()
-	for found_id in lobbies:
-		%LobbyRows.add_child(_build_lobby_row(found_id))
-	%BrowserEmptyLabel.visible = lobbies.is_empty()
+	var query = %BrowserSearch.text.strip_edges().to_lower()
+	var playlist_filter = ""
+	if %BrowserPlaylistFilter.selected > 0:
+		playlist_filter = str(%BrowserPlaylistFilter.get_item_metadata(%BrowserPlaylistFilter.selected))
+	var shown = 0
+	for found_id in browser_lobby_ids:
+		var info = _lobby_row_info(found_id)
+		if not playlist_filter.is_empty() and info.playlist_id != playlist_filter:
+			continue
+		if not query.is_empty() and not (query in info.title.to_lower() or query in info.host.to_lower() or query in info.playlist.to_lower()):
+			continue
+		%LobbyRows.add_child(_build_lobby_row(found_id, info, shown))
+		shown += 1
+	%BrowserEmptyLabel.visible = shown == 0
+	if browser_lobby_ids.is_empty():
+		%BrowserEmptyLabel.text = "No games are being hosted right now. Host one below!"
+	else:
+		%BrowserEmptyLabel.text = "No games match your search."
 
 
-func _build_lobby_row(found_id: int) -> Control:
-	var locked = Steam.getLobbyData(found_id, LOCKED_LOBBY_KEY) == "1"
+func _lobby_row_info(found_id: int) -> Dictionary:
 	var playlist_id = Steam.getLobbyData(found_id, PLAYLIST_LOBBY_KEY)
+	return {
+		"title": Steam.getLobbyData(found_id, TITLE_LOBBY_KEY),
+		"host": Steam.getLobbyData(found_id, HOST_NAME_LOBBY_KEY),
+		"playlist_id": playlist_id,
+		"playlist": _lobby_playlist_name(found_id, playlist_id),
+		"locked": Steam.getLobbyData(found_id, LOCKED_LOBBY_KEY) == "1",
+	}
 
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
 
-	# A plain Label, not RichTextLabel - host name and title are typed by
-	# other players, so they must never be parsed as BBCode.
+# "All playlists" plus every playlist this player has, rebuilt alongside the
+# pickers so new community playlists show up; keeps the current choice.
+func _update_browser_playlist_filter() -> void:
+	var picker: OptionButton = %BrowserPlaylistFilter
+	var current = "" if picker.selected <= 0 else str(picker.get_item_metadata(picker.selected))
+	picker.clear()
+	picker.add_item("All playlists")
+	picker.set_item_metadata(0, "")
+	var names = {}
+	for playlist_id in available_playlists:
+		names[playlist_id] = _playlist_display_name(playlist_id)
+	var sorted_ids = available_playlists.duplicate()
+	sorted_ids.sort_custom(func(a, b): return names[a].naturalnocasecmp_to(names[b]) < 0)
+	for playlist_id in sorted_ids:
+		picker.add_item(names[playlist_id])
+		picker.set_item_metadata(picker.item_count - 1, playlist_id)
+		if playlist_id == current:
+			picker.select(picker.item_count - 1)
+	if picker.selected < 0:
+		picker.select(0)
+
+
+func _build_lobby_header() -> void:
+	for column in LOBBY_COLUMNS:
+		%LobbyHeader.add_child(_make_lobby_cell(column[0].to_upper(), column[1], LOBBY_HEADER_COLOR, 15))
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(LOBBY_JOIN_COLUMN_WIDTH, 0)
+	%LobbyHeader.add_child(spacer)
+
+
+# A plain Label, not RichTextLabel - host name and title are typed by other
+# players, so they must never be parsed as BBCode.
+func _make_lobby_cell(text: String, ratio: float, color: Color, font_size: int = 18) -> Label:
 	var label = Label.new()
+	label.text = text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.size_flags_stretch_ratio = ratio
 	label.clip_text = true
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.add_theme_font_size_override("font_size", 20)
-	label.text = "%s's game - %s - %s%s" % [
-		Steam.getLobbyData(found_id, HOST_NAME_LOBBY_KEY),
-		Steam.getLobbyData(found_id, TITLE_LOBBY_KEY),
-		_lobby_playlist_name(found_id, playlist_id),
-		"  (password)" if locked else "",
-	]
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_font_size_override("font_size", font_size)
+	return label
+
+
+func _build_lobby_row(found_id: int, info: Dictionary, index: int) -> Control:
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = LOBBY_ROW_COLORS[index % LOBBY_ROW_COLORS.size()]
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 10
+	style.content_margin_right = 6
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	panel.add_theme_stylebox_override("panel", style)
+
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	panel.add_child(row)
+
+	var white = Color(0.93, 0.94, 0.96)
+	row.add_child(_make_lobby_cell(info.title, LOBBY_COLUMNS[0][1], white))
+	row.add_child(_make_lobby_cell(info.host, LOBBY_COLUMNS[1][1], Color(HOST_CHAT_COLOR)))
+	row.add_child(_make_lobby_cell(info.playlist, LOBBY_COLUMNS[2][1], white))
+	row.add_child(_make_lobby_cell("Password" if info.locked else "Open", LOBBY_COLUMNS[3][1],
+		LOBBY_LOCKED_COLOR if info.locked else LOBBY_OPEN_COLOR))
 
 	var join_button = Button.new()
 	join_button.text = "Join"
-	join_button.custom_minimum_size = Vector2(100, 0)
-	join_button.pressed.connect(_on_browser_join_pressed.bind(found_id, locked))
-
-	row.add_child(label)
+	join_button.custom_minimum_size = Vector2(LOBBY_JOIN_COLUMN_WIDTH, 0)
+	join_button.pressed.connect(_on_browser_join_pressed.bind(found_id, info.locked))
 	row.add_child(join_button)
-	return row
+	return panel
 
 
 func _on_browser_join_pressed(target_lobby_id: int, locked: bool) -> void:
@@ -746,8 +839,15 @@ func _update_room() -> void:
 	%RoomTitle.text = "%s's game - %s" % [host_name, title]
 
 	%HostName.text = host_name
+	%HostName.add_theme_color_override("font_color", Color(HOST_CHAT_COLOR))
 	_load_avatar(host_id, %HostAvatar)
 
+	# Same colors as their names in the lobby chat - only once someone's there.
+	var guest_named = guest_id != 0 and not (is_host and not guest_verified)
+	if guest_named:
+		%GuestName.add_theme_color_override("font_color", Color(GUEST_CHAT_COLOR))
+	else:
+		%GuestName.remove_theme_color_override("font_color")
 	if guest_id == 0:
 		%GuestName.text = "Waiting for opponent..."
 		%GuestAvatar.texture = null
@@ -847,6 +947,9 @@ func _load_available_playlists() -> void:
 	%PlaylistList.set_playlists(available_playlists, lobby_only_playlists)
 	%PlaylistPicker.select(form_choice if not form_choice.is_empty() else _default_playlist_id())
 	%PlaylistList.select(room_choice if not room_choice.is_empty() else _default_playlist_id())
+	_update_browser_playlist_filter()
+	if %BrowserContainer.visible:
+		_rebuild_lobby_rows()
 
 
 func _default_playlist_id() -> String:

@@ -29,6 +29,11 @@ func _ready() -> void:
 	Global.load_and_extract_card_data()
 	%Tips.visible = false
 
+	if Global.return_to_multiplayer_menu:
+		Global.return_to_multiplayer_menu = false
+		show_mode_selection()
+		show_multiplayer_menu()
+
 
 
 	master_volume.set_value_no_signal(SoundManagerScript.master_volume * 100)

@@ -103,6 +103,9 @@ var multiplayer_lobby_id: int = 0
 # Workshop) or "dummy" (local bot game). Set by Main's multiplayer submenu
 # right before switching scenes.
 var multiplayer_lobby_entry: String = "browse"
+# Set when leaving MultiplayerLobby with Back, so Main reopens on its
+# Multiplayer submenu instead of the top-level menu.
+var return_to_multiplayer_menu: bool = false
 
 var debug_forced_article_id: int = 0
 
