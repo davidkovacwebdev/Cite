@@ -16,7 +16,7 @@ const HOST_NAME_LOBBY_KEY := "host_name"
 const LOCKED_LOBBY_KEY := "locked"
 const VERSION_LOBBY_KEY := "cite_version"
 # Bump whenever lobby/match messaging changes in a way older builds can't
-# handle - Find a Match only lists lobbies with this exact value, so players
+# handle - Find / Host a Game only lists lobbies with this exact value, so players
 # on different builds never end up in the same match.
 const LOBBY_VERSION := "1"
 const CONNECTION_TIMEOUT_SECONDS := 15.0
@@ -112,7 +112,7 @@ func _ready() -> void:
 	_load_available_playlists()
 	%PlaylistList.playlist_selected.connect(_on_playlist_item_selected)
 
-	%VisibilityPicker.add_item("Public - listed in Find a Match", Visibility.PUBLIC)
+	%VisibilityPicker.add_item("Public - listed in the game list", Visibility.PUBLIC)
 	%VisibilityPicker.add_item("Private - join by code or invite", Visibility.PRIVATE)
 	%VisibilityPicker.item_selected.connect(_on_visibility_selected)
 
@@ -427,7 +427,7 @@ func _on_lobby_created(connect: int, new_lobby_id: int) -> void:
 	%ChatLog.clear()
 	_show_room()
 	if %VisibilityPicker.get_selected_id() == Visibility.PUBLIC:
-		_set_status("Your game is listed in Find a Match. Waiting for an opponent...")
+		_set_status("Your game is listed publicly. Waiting for an opponent...")
 	else:
 		_set_status("Private game - lobby code: %d. Copy it or invite a friend." % lobby_id)
 
@@ -1022,7 +1022,7 @@ func _on_play_pressed() -> void:
 	if not playlist_id.is_empty():
 		Global.multiplayer_playlist_id = playlist_id
 	Global.multiplayer_article_seed = randi()
-	# Unjoinable also drops it from everyone's Find a Match list.
+	# Unjoinable also drops it from everyone's Find / Host a Game list.
 	Steam.setLobbyJoinable(lobby_id, false)
 	Steam.setLobbyData(lobby_id, ARTICLE_SEED_LOBBY_KEY, str(Global.multiplayer_article_seed))
 	_publish_playlist(Global.multiplayer_playlist_id)

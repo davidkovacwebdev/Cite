@@ -98,7 +98,7 @@ var last_known_opponent_max_mana: int = 100
 # mid-match either.
 var multiplayer_lobby_id: int = 0
 
-# Which MultiplayerLobby screen to open on: "browse" (Find a Match - public
+# Which MultiplayerLobby screen to open on: "browse" (Find / Host a Game - public
 # game list, plus Host a Game / Join Privately), "submit" (Submit Playlist to
 # Workshop) or "dummy" (local bot game). Set by Main's multiplayer submenu
 # right before switching scenes.

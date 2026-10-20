@@ -292,7 +292,7 @@ theme_override_constants/separation = 16
 [node name="BrowserTitle" type="RichTextLabel" parent="BrowserContainer"]
 layout_mode = 2
 theme_override_font_sizes/normal_font_size = 36
-text = "Find a Match"
+text = "Find / Host a Game"
 fit_content = true
 autowrap_mode = 0
 horizontal_alignment = 1

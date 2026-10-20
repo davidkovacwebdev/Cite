@@ -142,7 +142,7 @@ func show_mode_selection():
 
 	$MainMenuQuotes.text = get_random_menu_quote()
 
-# Show multiplayer submenu (Find a Match, Submit Playlist, Lobby Dummy, Back)
+# Show multiplayer submenu (Find / Host a Game, Submit Playlist, Lobby Dummy, Back)
 func show_multiplayer_menu():
 	$CenterContainer/VBoxContainer/NormalMode.visible = false
 	$CenterContainer/VBoxContainer/Multiplayer.visible = false

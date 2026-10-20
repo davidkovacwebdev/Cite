@@ -124,7 +124,7 @@ text = "Multiplayer"
 [node name="FindMatch" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false
 layout_mode = 2
-text = "Find a Match"
+text = "Find / Host a Game"
 
 [node name="SubmitPlaylist" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false
