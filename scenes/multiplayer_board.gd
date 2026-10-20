@@ -4,8 +4,15 @@ class_name MultiplayerBoard
 
 const MAX_GUESS_DAMAGE := 600.0
 const TIMER_BAR_HEIGHT := 280.0
-const GRACE_PERIOD_SECONDS := 15.0
+const GRACE_PERIOD_SECONDS := 5.0
 const GRACE_COLOR := Color(0.749, 0.161, 0.161, 1)
+# A title letter is auto-revealed on every Nth chunk reveal (see
+# _maybe_reveal_title_letter).
+const TITLE_LETTER_EVERY_N_CHUNKS := 2
+# How long a drawn round's answer box stays up before the next round.
+const ANSWER_DISPLAY_SECONDS := 4.0
+# HP both players lose on a drawn round, times the round number.
+const DRAW_DAMAGE_PER_ROUND := 100
 const REWARD_PICK_TIMEOUT_SECONDS := 5.0
 const REWARD_TIMER_BAR_WIDTH := 420.0
 const REWARD_TIMER_BAR_HEIGHT := 14.0
@@ -16,12 +23,31 @@ const REWARD_SYNC_TIMEOUT_SECONDS := 5.0
 # How long the non-guesser waits for the winner's actual pick - comfortably
 # longer than REWARD_PICK_TIMEOUT_SECONDS so it isn't the one giving up first.
 const CARD_REWARD_WAIT_TIMEOUT_SECONDS := 20.0
-const CHAT_MESSAGE_COLOR := "#ff8a80"
+# Riser played across each chunk-reveal interval (and the grace period), timed
+# so its peak lands as the timer runs out - see _start_reveal_timer.
+const TIMER_CHARGE_SOUND := "res://assets/sounds/sfx/multiplayer/timer-riser.wav"
+const TIMER_CHARGE_VOLUME_DB := -14.0
+# Hit played the moment a reveal timer (or the grace period) runs out. Starts
+# barely audible and gets TIMER_END_STEP_DB louder with each timer in the
+# round, up to TIMER_END_MAX_DB - tension builds as the article fills in.
+const TIMER_END_SOUND := "res://assets/sounds/sfx/multiplayer/timer-end.wav"
+const TIMER_END_MIN_DB := -30.0
+const TIMER_END_STEP_DB := 2.5
+const TIMER_END_MAX_DB := 0.0
+# Tick on each 3-2-1 countdown number.
+const COUNTDOWN_TICK_SOUND := "res://assets/sounds/sfx/multiplayer/tic.wav"
+const COUNTDOWN_TICK_PITCH_VARIATION := 0.08
+# Where the riser's abrupt cut-off sits in the file (a short release tail
+# follows) - this is the moment lined up with the timer running out.
+const TIMER_RISER_PEAK_SECONDS := 12.0
+const CHAT_MESSAGE_COLOR := "#e6e6e6"
+const CHAT_OWN_NAME_COLOR := "#7ee0a1"
+const CHAT_OPPONENT_NAME_COLOR := "#ff6b6b"
 
 const CardScene = preload("res://scenes/Card.tscn")
 
 # Round-win reward: same 5 cards the multiplayer deck already draws from
-# (deck.gd's generate_multiplayer_special_cards), duplicated here rather than
+# (deck.gd's generate_multiplayer_hand), duplicated here rather than
 # shared since deck.gd's copy is tied to building deck-pool dictionaries and
 # this one is tied to building picker visuals - different enough shapes that
 # sharing would need its own abstraction for no real benefit.
@@ -52,6 +78,10 @@ var round_advancing: bool = false
 var round_started: bool = false
 var reveal_index: int = 0
 var reveal_timer: Timer
+# Two players taking turns, so one riser's release tail rings out while the
+# next interval's riser starts on the other.
+var timer_charge_players: Array[AudioStreamPlayer] = []
+var timer_charge_index: int = 0
 var in_grace_period: bool = false
 var frozen: bool = false
 var _reward_picked_key: String = ""
@@ -68,9 +98,8 @@ func _ready() -> void:
 	Global.run.current_round.vowels_revealed = false
 
 	# An armed effect only lasts the round it was activated in - carrying it
-	# into a fresh round (with a different title) would be confusing. This
-	# doesn't affect mp_special_cards_used, so the card itself still can't
-	# be played again this match either way.
+	# into a fresh round (with a different title) would be confusing. The
+	# card that armed it is already gone from the hand either way.
 	Global.run.double_down_armed = false
 	Global.run.letter_reveal_armed = false
 
@@ -84,7 +113,7 @@ func _ready() -> void:
 	%ChatInput.text_submitted.connect(_on_chat_submitted)
 	# This board is rebuilt every round - replay the match's chat so far.
 	for entry in MultiplayerSync.chat_history:
-		_add_chat_line(entry.name, entry.text)
+		_add_chat_line(entry.name, entry.text, entry.own)
 
 	# Reset here, once per round, rather than at the moment we start waiting
 	# for them (_wait_for_reward_picker_signal used to do this) - the winner's
@@ -119,6 +148,15 @@ func _ready() -> void:
 	reveal_timer.timeout.connect(_on_reveal_timer_timeout)
 	add_child(reveal_timer)
 
+	var riser = load(TIMER_CHARGE_SOUND)
+	for i in range(2):
+		var player = AudioStreamPlayer.new()
+		player.stream = riser
+		player.volume_db = TIMER_CHARGE_VOLUME_DB
+		player.bus = "SFX"
+		add_child(player)
+		timer_charge_players.append(player)
+
 	Global.run.current_round.card_playable = false
 	_start_countdown()
 
@@ -131,6 +169,7 @@ func _start_countdown() -> void:
 		if Global.multiplayer_match_over or not is_inside_tree():
 			return  # opponent left/match ended in the first couple seconds of the round
 		$CountdownLabel.text = n
+		SoundManagerScript.play_sfx_overlapping(COUNTDOWN_TICK_SOUND, 0.0, COUNTDOWN_TICK_PITCH_VARIATION)
 		await get_tree().create_timer(1.0).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
@@ -155,10 +194,29 @@ func _schedule_next_reveal() -> void:
 	if not chunks or reveal_index >= chunks.size():
 		_start_grace_period()
 		return
-	reveal_timer.start(_interval_for(reveal_index + 1))
+	_start_reveal_timer(_interval_for(reveal_index + 1))
+
+
+# Starts the reveal timer and the riser with it. The riser builds for 12s
+# (longer than any interval), so it starts partway in at normal speed and
+# hits its cut-off right as the timer runs out.
+func _start_reveal_timer(seconds: float) -> void:
+	reveal_timer.start(seconds)
+	var player = timer_charge_players[timer_charge_index]
+	timer_charge_index = (timer_charge_index + 1) % timer_charge_players.size()
+	if player.stream:
+		player.play(max(TIMER_RISER_PEAK_SECONDS - seconds, 0.0))
+
+
+func _stop_timer_charge() -> void:
+	for player in timer_charge_players:
+		player.stop()
 
 
 func _on_reveal_timer_timeout() -> void:
+	# reveal_index = timers already finished this round (0 for the first).
+	var end_db = min(TIMER_END_MIN_DB + TIMER_END_STEP_DB * reveal_index, TIMER_END_MAX_DB)
+	SoundManagerScript.play_sfx_overlapping(TIMER_END_SOUND, end_db)
 	if in_grace_period:
 		_on_grace_period_expired()
 		return
@@ -167,24 +225,72 @@ func _on_reveal_timer_timeout() -> void:
 	var chunk_index = reveal_order[reveal_index]
 	reveal_chunk(chunk_index + 1, chunks[chunk_index])
 	reveal_index += 1
+	_maybe_reveal_title_letter()
 	_schedule_next_reveal()
 
 
+# Every TITLE_LETTER_EVERY_N_CHUNKS chunks, reveals one random hidden letter
+# of the title. Per word (n = its letters): it may show at most (n - 1) / 3
+# letters in total, card reveals included (1-3 letter words never, 4-6 one,
+# 7-9 two, ...), always keeps at least one hidden, and short words wait -
+# nothing until chunk 9 - n (a 4-letter word from chunk 5, 8+ right away).
+func _maybe_reveal_title_letter() -> void:
+	if reveal_index % TITLE_LETTER_EVERY_N_CHUNKS != 0:
+		return
+	var title: String = Global.run.current_round.article_title
+	var censored: String = Global.run.current_round.article_censored_title
+	var candidates: Array[int] = []
+	var word_start = 0
+	for i in range(title.length() + 1):
+		if i == title.length() or title[i] == " ":
+			candidates.append_array(_revealable_letters(title, censored, word_start, i))
+			word_start = i + 1
+	if candidates.is_empty():
+		return
+	var index = candidates.pick_random()
+	Global.run.current_round.article_censored_title = censored.substr(0, index) + title[index] + censored.substr(index + 1)
+	update_board_title()
+
+
+# Hidden letter indices in title[from, to) if that word may get another
+# letter right now, else empty - see _maybe_reveal_title_letter().
+func _revealable_letters(title: String, censored: String, from: int, to: int) -> Array[int]:
+	var hidden: Array[int] = []
+	for i in range(from, to):
+		if censored[i] == "_":
+			hidden.append(i)
+	var letters = get_title_count(title.substr(from, to - from))
+	var max_revealed = int((letters - 1) / 3.0)
+	if hidden.size() <= 1 or letters - hidden.size() >= max_revealed or reveal_index < 9 - letters:
+		return []
+	return hidden
+
+
 # All chunks are revealed and nobody's guessed yet - give both players one
-# last 15s chance (bar turns red) before the round ends in a draw.
+# last 5s chance (bar turns red) before the round ends in a draw, which
+# costs both players DRAW_DAMAGE_PER_ROUND x round number HP.
 func _start_grace_period() -> void:
 	in_grace_period = true
 	var mat: ShaderMaterial = $RevealTimerBar.material
 	mat.set_shader_parameter("color", GRACE_COLOR)
-	reveal_timer.start(GRACE_PERIOD_SECONDS)
+	_start_reveal_timer(GRACE_PERIOD_SECONDS)
 
 
 func _on_grace_period_expired() -> void:
 	if round_advancing or Global.multiplayer_match_over or not is_inside_tree():
 		return
 	round_advancing = true
-	get_parent().show_banner("NOOBS!")
-	await get_tree().create_timer(2).timeout
+	# Nobody got it - show the answer, in the title bar and as the banner.
+	var title: String = Global.run.current_round.article_title
+	Global.run.current_round.article_censored_title = title
+	update_board_title()
+	get_parent().show_answer(title, ANSWER_DISPLAY_SECONDS)
+	# Each client damages only itself; the opponent sees it via vitals sync.
+	# Lethal damage ends the match right here (HealthComponent.die()).
+	Global.run.Health.damage(DRAW_DAMAGE_PER_ROUND * Global.run.round_number)
+	if Global.multiplayer_match_over or not is_inside_tree():
+		return
+	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 	_advance_round()
@@ -194,7 +300,7 @@ func _on_grace_period_expired() -> void:
 func _on_frozen(duration: float) -> void:
 	if not is_inside_tree() or Global.multiplayer_match_over:
 		return  # match already ended and this board's scene is gone - nothing to freeze
-	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav")
+	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav", 0.0, Card.MP_EFFECT_PITCH_VARIATION)
 	show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 	frozen = true
 	await get_tree().create_timer(duration).timeout
@@ -208,10 +314,11 @@ func _on_chat_submitted(text: String) -> void:
 	%ChatInput.clear()
 
 
-func _add_chat_line(sender_name: String, text: String) -> void:
+func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
 	# Both strings come from other players - escape "[" so they can't inject
 	# BBCode into the log.
-	%ChatLog.append_text("[b]%s:[/b] [color=%s]%s[/color]\n" % [
+	%ChatLog.append_text("[color=%s][b]%s:[/b][/color] [color=%s]%s[/color]\n" % [
+		CHAT_OWN_NAME_COLOR if is_own else CHAT_OPPONENT_NAME_COLOR,
 		sender_name.replace("[", "[lb]"),
 		CHAT_MESSAGE_COLOR,
 		text.replace("[", "[lb]"),
@@ -231,7 +338,7 @@ func _on_chunks_scrambled(duration: float) -> void:
 		return  # match already ended and this board's scene is gone - nothing to scramble
 	# Played before the size check so the victim still hears the card even
 	# when there's too little revealed text for the scramble to be visible.
-	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav")
+	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav", 0.0, Card.MP_EFFECT_PITCH_VARIATION)
 	show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
 	var vbox = $ScrollContainer/VBoxContainer
 	var original_order = vbox.get_children()
@@ -340,7 +447,7 @@ func _input(event):
 		var solution = simplify_string(Global.run.current_round.article_title.strip_edges().to_lower())
 		var alternative_solution =  simplify_string(Global.run.current_round.article_alternative_title.strip_edges().to_lower())
 		if Global.is_guess_match(guess, solution) or Global.is_guess_match(guess, alternative_solution):
-			correct_guess()
+			correct_guess($InputField.text.strip_edges())
 
 		else:
 			$InputField.wrong_border()
@@ -358,7 +465,9 @@ func _input(event):
 			$InputField.text=""
 			Global.run.number_of_wrong_guesses += 1
 
-func correct_guess():
+# typed_guess is what the player entered, shown on the opponent's screen -
+# empty when a Letter Reveal completed the title instead.
+func correct_guess(typed_guess: String = ""):
 	# not is_inside_tree() matters here specifically because this can be
 	# reached two ways: the normal typed guess, and reveal_letter_value()
 	# (round.gd) calling straight into this when a Letter Reveal happens to
@@ -370,6 +479,7 @@ func correct_guess():
 		return
 	round_advancing = true
 	reveal_timer.stop()  # pause chunk reveals until the next round starts
+	_stop_timer_charge()
 
 	Global.setAchievement(Global.getArticleAch(Global.run.current_round.current_id))
 	SoundManagerScript.play_sound("res://assets/sounds/achievements/"+Global.getArticleAchSound(Global.run.current_round.current_id),"SFX")
@@ -379,14 +489,14 @@ func correct_guess():
 	if Global.run.double_down_armed:
 		damage *= 2
 		Global.run.double_down_armed = false
-	MultiplayerSync.send_guess_result(true, damage)
+	MultiplayerSync.send_guess_result(true, damage, typed_guess)
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return  # dummy-opponent mode routes this synchronously all the way through DummyOpponent -> opponent_match_over -> change_scene_to_file, unlike a real match where this just fires off an async network message - a killing blow here can end the match and free this scene before the next line runs
 
 	$InputField.text = "Bingooo"
 	$ArticleTitle.text = Global.run.current_round.article_title
 	$InputField.success_border()
-	get_parent().show_banner("BINGO!")
+	get_parent().show_banner("-%d" % damage, Round.DAMAGE_DEALT_COLOR)
 	await get_tree().create_timer(2).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
@@ -403,12 +513,19 @@ func correct_guess():
 
 
 # Called on the receiving end whenever the winner hands over the reward card
-# they didn't pick. loser_action goes into Run.mp_reward_cards, which
+# they didn't pick. loser_action goes into Run.mp_hand, which
 # survives the upcoming scene reload, so the next round's deal picks it up. winner_action is only needed by _watch_opponent_reward_choice
 # below, to know which of the two mirrored cards to animate.
 func _on_card_reward_received(winner_action: int, loser_action: int) -> void:
 	print("[MPDEBUG] RECEIVED card_reward winner_action=%d loser_action=%d" % [winner_action, loser_action])
-	Global.run.mp_reward_cards.append(loser_action)
+	if loser_action == Card.Action_sub_type.mp_heal:
+		# A leftover Heal is applied right away instead of becoming a card -
+		# same amount the picker showed (next round's value).
+		if not Global.multiplayer_match_over:
+			SoundManagerScript.play_sfx_overlapping(REWARD_SOUNDS["heal"], Card.MP_HEAL_SOUND_VOLUME_DB, Card.MP_EFFECT_PITCH_VARIATION)
+			Global.run.Health.heal(Card.mp_heal_amount(Global.run.round_number + 1))
+	else:
+		Global.run.mp_hand.append(loser_action)
 	_pending_card_reward_winner_action = winner_action
 	_pending_card_reward_ready = true
 
@@ -425,11 +542,8 @@ func _on_reward_none_signal() -> void:
 	_pending_reward_picker_ready = true
 
 
-# Every special is always on offer, including ones already played this
-# match - a reward is an extra use of that card on top of the deck's own copy
-# (which mp_special_cards_used still limits to once per match). Filtering out
-# played specials here meant anyone who played their cards quickly emptied
-# the pool within a couple of rounds and never saw the picker again.
+# Every special is always on offer, including ones already played or still
+# in hand this match - a reward is just one more card added to the hand.
 func _available_reward_keys() -> Array:
 	return REWARD_SPECIALS.keys()
 
@@ -446,7 +560,7 @@ func _run_card_reward_choice() -> void:
 	print("[MPDEBUG] _run_card_reward_choice available=%s" % [available])
 	if available.size() < 2:
 		if available.size() == 1:
-			Global.run.mp_reward_cards.append(REWARD_SPECIALS[available[0]])
+			Global.run.mp_hand.append(REWARD_SPECIALS[available[0]])
 		print("[MPDEBUG] sending reward_none (fewer than 2 available)")
 		MultiplayerSync.send_reward_none()
 		return
@@ -458,10 +572,10 @@ func _run_card_reward_choice() -> void:
 		return
 	var picked: String = result.key
 	var leftover = available[1] if picked == available[0] else available[0]
-	Global.run.mp_reward_cards.append(REWARD_SPECIALS[picked])
+	Global.run.mp_hand.append(REWARD_SPECIALS[picked])
 	print("[MPDEBUG] sending card_reward winner_action=%d loser_action=%d" % [REWARD_SPECIALS[picked], REWARD_SPECIALS[leftover]])
 	MultiplayerSync.send_card_reward(REWARD_SPECIALS[picked], REWARD_SPECIALS[leftover])
-	SoundManagerScript.play_sfx_overlapping(REWARD_SOUNDS[picked], Card.MP_HEAL_SOUND_VOLUME_DB if picked == "heal" else 0.0)
+	SoundManagerScript.play_sfx_overlapping(REWARD_SOUNDS[picked], Card.MP_HEAL_SOUND_VOLUME_DB if picked == "heal" else 0.0, Card.MP_EFFECT_PITCH_VARIATION)
 
 	# Gives the opponent's mirrored view (_watch_opponent_reward_choice) time
 	# to play its "opponent picked!" animation before both sides land in the
@@ -562,29 +676,29 @@ func _build_reward_card_visual(key: String) -> Card:
 	match key:
 		"double_down":
 			card_title.text = "Double Down"
-			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead. Once per match."
+			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead."
 			effect_symbol.texture = load("res://assets/sprites/HP.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "2x"
 		"letter_snipe":
 			card_title.text = "Letter Snipe"
-			card_description.text = "Instantly reveals one random letter in the title. Free. Once per match."
+			card_description.text = "Instantly reveals one random letter in the title. Free."
 			effect_symbol.texture = load("res://assets/sprites/mana.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "1x"
 		"letter_reveal":
 			card_title.text = "Letter Reveal"
-			card_description.text = "Submit one letter next to reveal every match in the title. Once per match."
+			card_description.text = "Submit one letter next to reveal every match in the title."
 			effect_symbol.texture = load("res://assets/sprites/mana.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "1x"
 		"freeze":
 			card_title.text = "Freeze"
-			card_description.text = "Opponent can't submit guesses for 2 seconds. Once per match."
+			card_description.text = "Opponent can't submit guesses for 2 seconds."
 			effect_text.text = "2s"
 		"chunk_scramble":
 			card_title.text = "Static"
-			card_description.text = "Scrambles the order of the opponent's revealed text for 5 seconds. Once per match."
+			card_description.text = "Scrambles the order of the opponent's revealed text for 5 seconds."
 			effect_text.text = "5s"
 		"heal":
 			# Reward cards are played next round, after _advance_round bumps
@@ -772,7 +886,7 @@ func _play_card_highlight(card: Card) -> void:
 	await tween_out.finished
 
 
-func _on_opponent_guess_result(correct: bool, damage: int) -> void:
+func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> void:
 	# not is_inside_tree() matters here for the same reason it does in
 	# correct_guess() - this fires off an incoming network message, so it can
 	# land at any time, including after the match already ended and this
@@ -782,12 +896,23 @@ func _on_opponent_guess_result(correct: bool, damage: int) -> void:
 		return
 	round_advancing = true
 	reveal_timer.stop()  # pause chunk reveals until the next round starts
+	_stop_timer_charge()
 	Global.run.current_round.card_playable = false
 	Global.run.Health.damage(damage)
 	if Global.multiplayer_match_over:
 		return  # damage() can end the match mid-function - bail before touching the freed scene
-	get_parent().show_banner("OPPONENT GUESSED!")
-	await get_tree().create_timer(2).timeout
+	get_parent().show_banner("-%d" % damage, Round.DAMAGE_TAKEN_COLOR)
+	# Show what they typed (fuzzy matching means it can differ from the
+	# title, so the real title goes underneath), and fill in the title bar.
+	var title: String = Global.run.current_round.article_title
+	Global.run.current_round.article_censored_title = title
+	update_board_title()
+	if guess == "":
+		get_parent().show_answer(title, ANSWER_DISPLAY_SECONDS, "Opponent completed the title")
+	else:
+		var footer = "" if simplify_string(guess) == simplify_string(title) else "Answer: " + title
+		get_parent().show_answer(guess, ANSWER_DISPLAY_SECONDS, "Opponent guessed", footer)
+	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 

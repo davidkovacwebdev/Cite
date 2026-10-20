@@ -4,6 +4,9 @@ class_name Round
 
 const FROZEN_STATUS_COLOR := Color(0.62, 0.86, 1.0)
 const SCRAMBLED_STATUS_COLOR := Color(1.0, 0.78, 0.36)
+# Multiplayer round-end damage number (MultiplayerBoard): dealt vs taken.
+const DAMAGE_DEALT_COLOR := Color(0.45, 0.9, 0.5)
+const DAMAGE_TAKEN_COLOR := Color(0.95, 0.3, 0.3)
 
 var current_id
 var article_chunks
@@ -115,9 +118,10 @@ func end_round():
 	Engine.get_main_loop().reload_current_scene()
 
 
-func show_banner(text: String) -> void:
+func show_banner(text: String, color: Color = Color(0.75, 0.08, 0.08)) -> void:
 	var banner = %BigBanner
 	banner.text = text
+	banner.add_theme_color_override("default_color", color)
 	banner.modulate.a = 0.0
 	var tween = create_tween()
 	tween.tween_property(banner, "modulate:a", 1.0, 0.3)
@@ -125,6 +129,67 @@ func show_banner(text: String) -> void:
 	tween.tween_property(banner, "modulate:a", 0.0, 0.5)
 	
 	
+# Centered box revealing the article title after a multiplayer round nobody
+# guessed (or what the opponent typed when they got it - then `footer` holds
+# the real title). Fades in, holds, fades out within `duration` seconds -
+# built in code on its own CanvasLayer so it sits above everything.
+func show_answer(title: String, duration: float, caption_text: String = "The answer was", footer: String = "") -> void:
+	var layer = CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(center)
+
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.085, 0.1, 0.95)
+	style.border_color = Color(0.533, 0.341, 0.71, 1)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(14)
+	style.content_margin_left = 40
+	style.content_margin_right = 40
+	style.content_margin_top = 18
+	style.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel", style)
+	panel.modulate.a = 0.0
+	center.add_child(panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	panel.add_child(vbox)
+
+	var caption = Label.new()
+	caption.text = caption_text
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	caption.add_theme_font_size_override("font_size", 20)
+	vbox.add_child(caption)
+
+	var answer = Label.new()
+	answer.text = title
+	answer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	answer.add_theme_color_override("font_color", Color.WHITE)
+	answer.add_theme_font_size_override("font_size", 48 if title.length() <= 16 else (36 if title.length() <= 26 else 28))
+	vbox.add_child(answer)
+
+	if footer != "":
+		var footer_label = Label.new()
+		footer_label.text = footer
+		footer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		footer_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+		footer_label.add_theme_font_size_override("font_size", 18)
+		vbox.add_child(footer_label)
+
+	var tween = create_tween()
+	tween.tween_property(panel, "modulate:a", 1.0, 0.3)
+	tween.tween_interval(max(duration - 0.8, 0.0))
+	tween.tween_property(panel, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(layer.queue_free)
+
+
 # Big see-through text over the middle of the screen for a card effect
 # (Freeze, Static) - pops in, holds, then drifts up as it fades out.
 func show_status(text: String, color: Color = Color.WHITE) -> void:

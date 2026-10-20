@@ -113,25 +113,23 @@ text = "Exit"
 layout_mode = 2
 text = "Normal"
 
+[node name="HardcoreMode" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Hardcore"
+
 [node name="Multiplayer" type="Button" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 text = "Multiplayer"
 
-[node name="BrowseGames" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="FindMatch" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false
 layout_mode = 2
-text = "Browse Games"
+text = "Find a Match"
 
-[node name="Ranked" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="SubmitPlaylist" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false
 layout_mode = 2
-disabled = true
-text = "Ranked"
-
-[node name="HostJoinLobby" type="Button" parent="CenterContainer/VBoxContainer"]
-visible = false
-layout_mode = 2
-text = "Host / Join Lobby"
+text = "Submit Playlist to Workshop"
 
 [node name="LobbyDummy" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false
@@ -142,10 +140,6 @@ text = "Lobby Dummy"
 visible = false
 layout_mode = 2
 text = "Back"
-
-[node name="HardcoreMode" type="Button" parent="CenterContainer/VBoxContainer"]
-layout_mode = 2
-text = "Hardcore"
 
 [node name="Start" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false

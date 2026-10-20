@@ -17,9 +17,6 @@ var is_dummy_opponent: bool = false
 # reloads each round), so its accumulated damage has to live here instead of
 # on the node itself, or it'd silently reset to full HP every round.
 var dummy_opponent_hp: int = 2000
-# Starting HP for BOTH sides in Lobby Dummy matches only (testing), so a
-# match doesn't end before whatever's being tested gets a chance to happen.
-const DUMMY_TEST_HP := 1000000
 var dummy_opponent_max_hp: int = 2000
 var multiplayer_opponent_id: int = 0
 var multiplayer_opponent_name: String = ""
@@ -101,10 +98,11 @@ var last_known_opponent_max_mana: int = 100
 # mid-match either.
 var multiplayer_lobby_id: int = 0
 
-# Which MultiplayerLobby screen to open on: "browse" (public game list) or
-# "host_join" (host a game / connect privately with a code). Set by Main's
-# multiplayer submenu right before switching scenes.
-var multiplayer_lobby_entry: String = "host_join"
+# Which MultiplayerLobby screen to open on: "browse" (Find a Match - public
+# game list, plus Host a Game / Join Privately), "submit" (Submit Playlist to
+# Workshop) or "dummy" (local bot game). Set by Main's multiplayer submenu
+# right before switching scenes.
+var multiplayer_lobby_entry: String = "browse"
 
 var debug_forced_article_id: int = 0
 

@@ -292,7 +292,7 @@ theme_override_constants/separation = 16
 [node name="BrowserTitle" type="RichTextLabel" parent="BrowserContainer"]
 layout_mode = 2
 theme_override_font_sizes/normal_font_size = 36
-text = "Browse Games"
+text = "Find a Match"
 fit_content = true
 autowrap_mode = 0
 horizontal_alignment = 1
@@ -311,7 +311,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
-text = "No games are being hosted right now. Host one from Host / Join Lobby!"
+text = "No games are being hosted right now. Host one below!"
 horizontal_alignment = 1
 autowrap_mode = 2
 
@@ -325,6 +325,25 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
+
+[node name="BrowserActions" type="HBoxContainer" parent="BrowserContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="BrowserHostButton" type="Button" parent="BrowserContainer/BrowserActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Host a Game"
+
+[node name="BrowserJoinButton" type="Button" parent="BrowserContainer/BrowserActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "Join Privately"
 
 [node name="BrowserButtons" type="HBoxContainer" parent="BrowserContainer"]
 layout_mode = 2

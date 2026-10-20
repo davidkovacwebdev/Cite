@@ -36,7 +36,7 @@ func _on_opponent_vitals_updated(hp: int, max_hp: int, mana: int, max_mana: int)
 	%ManaDisplay.set_display_vitals(mana, max_mana)
 
 
-func _on_opponent_guess_result(correct: bool, damage: int) -> void:
+func _on_opponent_guess_result(correct: bool, damage: int, _guess: String) -> void:
 	if correct:
 		return  # the dramatic banner (board.gd) covers this case
 	%GuessToast.text = "Opponent guessed wrong!"

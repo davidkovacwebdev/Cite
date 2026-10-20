@@ -16,7 +16,7 @@ const HOST_NAME_LOBBY_KEY := "host_name"
 const LOCKED_LOBBY_KEY := "locked"
 const VERSION_LOBBY_KEY := "cite_version"
 # Bump whenever lobby/match messaging changes in a way older builds can't
-# handle - Browse Games only lists lobbies with this exact value, so players
+# handle - Find a Match only lists lobbies with this exact value, so players
 # on different builds never end up in the same match.
 const LOBBY_VERSION := "1"
 const CONNECTION_TIMEOUT_SECONDS := 15.0
@@ -112,7 +112,7 @@ func _ready() -> void:
 	_load_available_playlists()
 	%PlaylistList.playlist_selected.connect(_on_playlist_item_selected)
 
-	%VisibilityPicker.add_item("Public - listed in Browse Games", Visibility.PUBLIC)
+	%VisibilityPicker.add_item("Public - listed in Find a Match", Visibility.PUBLIC)
 	%VisibilityPicker.add_item("Private - join by code or invite", Visibility.PRIVATE)
 	%VisibilityPicker.item_selected.connect(_on_visibility_selected)
 
@@ -131,6 +131,8 @@ func _ready() -> void:
 	%RoomBackButton.pressed.connect(_on_room_back_pressed)
 	%PlayButton.pressed.connect(_on_play_pressed)
 	%RefreshButton.pressed.connect(_on_refresh_pressed)
+	%BrowserHostButton.pressed.connect(_on_host_pressed)
+	%BrowserJoinButton.pressed.connect(_on_join_pressed)
 	%BrowserBackButton.pressed.connect(_go_to_main_menu)
 	%ChatSendButton.pressed.connect(_send_chat)
 	%ChatInput.text_submitted.connect(func(_text): _send_chat())
@@ -168,6 +170,8 @@ func _ready() -> void:
 func _show_entry_screen(message: String = "") -> void:
 	if dummy_lobby:
 		_show_host_form()
+	elif Global.multiplayer_lobby_entry == "submit":
+		_show_submit_panel()
 	elif Global.multiplayer_lobby_entry == "browse":
 		_show_browser()
 	else:
@@ -249,7 +253,9 @@ func _set_status(text: String) -> void:
 func _on_back_pressed() -> void:
 	if Workshop.is_uploading:
 		return
-	if %ChoicePanel.visible or (dummy_lobby and %HostForm.visible):
+	# Back from whichever screen Main opened us on goes straight to the menu.
+	if %ChoicePanel.visible or (dummy_lobby and %HostForm.visible) \
+			or (Global.multiplayer_lobby_entry == "submit" and %SubmitPanel.visible):
 		_go_to_main_menu()
 	else:
 		_show_entry_screen()
@@ -421,7 +427,7 @@ func _on_lobby_created(connect: int, new_lobby_id: int) -> void:
 	%ChatLog.clear()
 	_show_room()
 	if %VisibilityPicker.get_selected_id() == Visibility.PUBLIC:
-		_set_status("Your game is listed in Browse Games. Waiting for an opponent...")
+		_set_status("Your game is listed in Find a Match. Waiting for an opponent...")
 	else:
 		_set_status("Private game - lobby code: %d. Copy it or invite a friend." % lobby_id)
 
@@ -1016,7 +1022,7 @@ func _on_play_pressed() -> void:
 	if not playlist_id.is_empty():
 		Global.multiplayer_playlist_id = playlist_id
 	Global.multiplayer_article_seed = randi()
-	# Unjoinable also drops it from everyone's Browse Games list.
+	# Unjoinable also drops it from everyone's Find a Match list.
 	Steam.setLobbyJoinable(lobby_id, false)
 	Steam.setLobbyData(lobby_id, ARTICLE_SEED_LOBBY_KEY, str(Global.multiplayer_article_seed))
 	_publish_playlist(Global.multiplayer_playlist_id)
@@ -1046,10 +1052,10 @@ func _start_dummy_match() -> void:
 	Global.multiplayer_article_seed = randi()
 	Global.is_multiplayer_match = true
 	Global.is_dummy_opponent = true
-	Global.dummy_opponent_hp = Global.DUMMY_TEST_HP
-	Global.dummy_opponent_max_hp = Global.DUMMY_TEST_HP
-	Global.last_known_opponent_hp = Global.DUMMY_TEST_HP
-	Global.last_known_opponent_max_hp = Global.DUMMY_TEST_HP
+	Global.dummy_opponent_hp = 2000
+	Global.dummy_opponent_max_hp = 2000
+	Global.last_known_opponent_hp = 2000
+	Global.last_known_opponent_max_hp = 2000
 	Global.multiplayer_opponent_id = 0
 	Global.multiplayer_opponent_name = DummyOpponent.BOT_NAME
 	MultiplayerSync.chat_history.clear()

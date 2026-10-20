@@ -53,6 +53,8 @@ enum Action_sub_type {
 }
 
 const MP_HEAL_BASE := 300
+# Slight random pitch on each card effect sound so repeats don't sound canned.
+const MP_EFFECT_PITCH_VARIATION := 0.05
 # heal.mp3 is ~5 dB hotter than the other multiplayer card sounds.
 const MP_HEAL_SOUND_VOLUME_DB := -5.0
 
@@ -63,9 +65,6 @@ static func mp_heal_amount(round_number: int) -> int:
 
 var action_type: Action_sub_type
 
-# Multiplayer reward card (dealt from Run.mp_reward_cards) rather than the
-# deck's own once-per-match copy of a special.
-var is_mp_reward: bool = false
 
 var sway_tween: Tween
 
@@ -78,6 +77,11 @@ func _ready() -> void:
 		$CardTitle.add_theme_color_override("default_color", Color.WHITE)
 		$CardTitle.add_theme_font_size_override("normal_font_size", 18)
 		$CardTitle.add_theme_constant_override("line_separation", -4)
+		# No type icon in multiplayer - title spans the card and is centered.
+		$CardSymbol.visible = false
+		$CardTitle.offset_left = 12
+		$CardTitle.offset_right = 156
+		$CardTitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		$Description.add_theme_color_override("default_color", Color.WHITE)
 		$Description2.add_theme_color_override("default_color", Color.WHITE)
 		$EffectText.add_theme_color_override("default_color", Color.WHITE)
@@ -95,8 +99,8 @@ func _process(delta: float) -> void:
 func play_card():
 	Global.run.number_of_played_cards += 1
 	if Global.run.current_round.card_playable == true:
-		if is_mp_reward:
-			Global.run.mp_reward_cards.erase(action_type)  # removes just this one copy
+		if Global.is_multiplayer_match:
+			Global.run.mp_hand.erase(action_type)  # removes just this one copy
 		if not (self.card_type == 3 and self.action_type == Action_sub_type.heal):
 			Global.run.Health.combo_modifier = 0
 			Global.run.current_round.current_board.update_heal_combo()
@@ -255,52 +259,43 @@ func play_card():
 				12:
 					# Double Down - arms bonus/penalty for the player's very
 					# next guess attempt (handled in multiplayer_board.gd).
-					_mark_special_used("double_down")
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/double-down.wav")
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/double-down.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					Global.run.double_down_armed = true
 				13:
 					# Letter Snipe - free instant version of reveal_letter().
-					_mark_special_used("letter_snipe")
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-snipe.wav")
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-snipe.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					reveal_letter()
 				14:
 					# Letter Reveal - arms the guess field to treat the next
 					# submission as a single letter instead of a guess.
-					_mark_special_used("letter_reveal")
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-reveal.wav")
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-reveal.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					Global.run.letter_reveal_armed = true
 					Global.run.current_round.current_board.update_letter_reveal_hint(true)
 				15:
 					# Freeze - opponent can't submit guesses for a bit.
-					_mark_special_used("freeze")
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav")
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					MultiplayerSync.send_freeze_opponent()
 					Global.run.current_round.current_board.show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 				16:
 					# Static - temporarily scrambles the opponent's revealed
 					# chunk order.
-					_mark_special_used("chunk_scramble")
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav")
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/shamble.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					MultiplayerSync.send_scramble_opponent()
 					Global.run.current_round.current_board.show_status("Chunks are scrambled", Round.SCRAMBLED_STATUS_COLOR)
 				17:
 					# Heal - multiplayer reward card, see mp_heal_amount().
-					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/heal.mp3", MP_HEAL_SOUND_VOLUME_DB)
+					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/heal.mp3", MP_HEAL_SOUND_VOLUME_DB, MP_EFFECT_PITCH_VARIATION)
 					Global.run.Health.heal(mp_heal_amount(Global.run.round_number))
 				_:
 					Global.run.Health.damage(500)
 					Global.run.current_round.current_board.correct_guess()
 
 
-		Global.run.current_round.current_deck.draw_card()
+		# Multiplayer has no deck to refill from - the hand only grows by the
+		# round reward.
+		if not Global.is_multiplayer_match:
+			Global.run.current_round.current_deck.draw_card()
 		self.queue_free()
-
-
-# A reward copy is an extra use on top of the deck's own copy, so playing it
-# mustn't mark the deck copy as spent.
-func _mark_special_used(key: String) -> void:
-	if not is_mp_reward:
-		Global.run.mp_special_cards_used[key] = true
 
 
 func set_common_type():
@@ -464,7 +459,7 @@ func _on_mouse_entered() -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 		if Global.is_multiplayer_match:
-			SoundManagerScript.play_sound_with_pitch("res://assets/sounds/sfx/multiplayer/card-woosh.wav","SFX")
+			SoundManagerScript.play_sound_with_pitch("res://assets/sounds/sfx/multiplayer/card-woosh.wav", "SFX", 0.85, 1.15)
 		else:
 			SoundManagerScript.play_sound_with_pitch("res://assets/sounds/sfx//woosh/woosh2.wav","SFX")
 

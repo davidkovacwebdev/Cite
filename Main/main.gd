@@ -60,9 +60,8 @@ func _ready() -> void:
 	$CenterContainer/VBoxContainer/Exit.pressed.connect(_on_exit_pressed)
 	$CenterContainer/VBoxContainer/NormalMode.pressed.connect(_on_normal_mode_pressed)
 	$CenterContainer/VBoxContainer/Multiplayer.pressed.connect(_on_multiplayer_pressed)
-	$CenterContainer/VBoxContainer/BrowseGames.pressed.connect(_on_browse_games_pressed)
-	$CenterContainer/VBoxContainer/Ranked.pressed.connect(_on_ranked_pressed)
-	$CenterContainer/VBoxContainer/HostJoinLobby.pressed.connect(_on_host_join_lobby_pressed)
+	$CenterContainer/VBoxContainer/FindMatch.pressed.connect(_on_find_match_pressed)
+	$CenterContainer/VBoxContainer/SubmitPlaylist.pressed.connect(_on_submit_playlist_pressed)
 	$CenterContainer/VBoxContainer/LobbyDummy.pressed.connect(_on_lobby_dummy_pressed)
 	$CenterContainer/VBoxContainer/MultiplayerBack.pressed.connect(_on_multiplayer_back_pressed)
 	$CenterContainer/VBoxContainer/HardcoreMode.pressed.connect(_on_hardcore_mode_pressed)
@@ -102,9 +101,8 @@ func show_main_menu():
 	$CenterContainer/VBoxContainer/SearchFilter.visible = false
 
 	# Hide multiplayer submenu buttons
-	$CenterContainer/VBoxContainer/BrowseGames.visible = false
-	$CenterContainer/VBoxContainer/Ranked.visible = false
-	$CenterContainer/VBoxContainer/HostJoinLobby.visible = false
+	$CenterContainer/VBoxContainer/FindMatch.visible = false
+	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = false
 	$CenterContainer/VBoxContainer/LobbyDummy.visible = false
 	$CenterContainer/VBoxContainer/MultiplayerBack.visible = false
 
@@ -137,24 +135,22 @@ func show_mode_selection():
 	$CenterContainer/VBoxContainer/Back.visible = true
 
 	# Hide multiplayer submenu buttons (in case we got here from there)
-	$CenterContainer/VBoxContainer/BrowseGames.visible = false
-	$CenterContainer/VBoxContainer/Ranked.visible = false
-	$CenterContainer/VBoxContainer/HostJoinLobby.visible = false
+	$CenterContainer/VBoxContainer/FindMatch.visible = false
+	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = false
 	$CenterContainer/VBoxContainer/LobbyDummy.visible = false
 	$CenterContainer/VBoxContainer/MultiplayerBack.visible = false
 
 	$MainMenuQuotes.text = get_random_menu_quote()
 
-# Show multiplayer submenu (Browse Games, Ranked, Host/Join Lobby, Back)
+# Show multiplayer submenu (Find a Match, Submit Playlist, Lobby Dummy, Back)
 func show_multiplayer_menu():
 	$CenterContainer/VBoxContainer/NormalMode.visible = false
 	$CenterContainer/VBoxContainer/Multiplayer.visible = false
 	$CenterContainer/VBoxContainer/HardcoreMode.visible = false
 	$CenterContainer/VBoxContainer/Back.visible = false
 
-	$CenterContainer/VBoxContainer/BrowseGames.visible = true
-	$CenterContainer/VBoxContainer/Ranked.visible = true
-	$CenterContainer/VBoxContainer/HostJoinLobby.visible = true
+	$CenterContainer/VBoxContainer/FindMatch.visible = true
+	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = true
 	$CenterContainer/VBoxContainer/LobbyDummy.visible = true
 	$CenterContainer/VBoxContainer/MultiplayerBack.visible = true
 
@@ -205,18 +201,14 @@ func _on_multiplayer_back_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
 	show_mode_selection()
 
-func _on_browse_games_pressed():
+func _on_find_match_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
 	Global.multiplayer_lobby_entry = "browse"
 	get_tree().change_scene_to_file("res://scenes/MultiplayerLobby.tscn")
 
-func _on_ranked_pressed():
+func _on_submit_playlist_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
-	# TODO: Implement ranked multiplayer
-
-func _on_host_join_lobby_pressed():
-	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
-	Global.multiplayer_lobby_entry = "host_join"
+	Global.multiplayer_lobby_entry = "submit"
 	get_tree().change_scene_to_file("res://scenes/MultiplayerLobby.tscn")
 
 func _on_lobby_dummy_pressed():

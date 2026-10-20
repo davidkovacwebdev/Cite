@@ -72,8 +72,9 @@ func play_sound(sound_path: String, bus: String = "SFX"):
 # sfx_player, and skips the global cooldown - so the sound can't be cut off by
 # whatever plays next (e.g. the hover woosh of the card that slides under the
 # mouse right after one is played) or skipped because something else just
-# played. Used by the multiplayer card sounds.
-func play_sfx_overlapping(sound_path: String, volume_db: float = 0.0) -> void:
+# played. Used by the multiplayer card sounds. pitch_variation randomizes the
+# pitch by up to +/- that fraction (0.05 = 5%).
+func play_sfx_overlapping(sound_path: String, volume_db: float = 0.0, pitch_variation: float = 0.0) -> void:
 	var sound = load(sound_path)
 	if not sound:
 		print("Sound not found: ", sound_path)
@@ -82,6 +83,7 @@ func play_sfx_overlapping(sound_path: String, volume_db: float = 0.0) -> void:
 	sfx_pool_index = (sfx_pool_index + 1) % sfx_pool.size()
 	player.stream = sound
 	player.volume_db = volume_db
+	player.pitch_scale = 1.0 + randf_range(-pitch_variation, pitch_variation)
 	player.play()
 
 func play_sound_with_pitch(sound_path: String, bus: String = "SFX", min_pitch: float = 0.9, max_pitch: float = 1.1):

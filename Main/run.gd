@@ -57,19 +57,17 @@ var legacy_mana_restore:int
 
 var hand_size:int = 3
 
-# Multiplayer-only special cards: each usable once per MATCH (persists across
-# round reloads since this whole Run object does), not once per round.
-var mp_special_cards_used: Dictionary = {}
 var double_down_armed: bool = false
 var letter_reveal_armed: bool = false
 
-# Round-win reward cards (see MultiplayerBoard._run_card_reward_choice) this
-# player owns but hasn't played yet, as Card.Action_sub_type values. Every
-# round they're dealt back into the deck alongside the unplayed specials, and
-# one entry is removed only when that card is actually played - so a reward
-# stays with the player for the rest of the match until used. Persists across
-# round reloads since this whole Run object does.
-var mp_reward_cards: Array = []
+# Multiplayer hand, as Card.Action_sub_type values, carried across rounds
+# (persists through round reloads since this whole Run object does). Dealt
+# once at match start - the same 3 random specials for both players (see
+# Deck.generate_multiplayer_hand) - then each round adds the reward card the
+# player picked or was handed (MultiplayerBoard). A card leaves only when
+# it's played.
+var mp_hand: Array = []
+var mp_hand_dealt: bool = false
 
 
 

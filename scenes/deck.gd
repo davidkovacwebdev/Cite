@@ -38,9 +38,9 @@ func generate_deck(n,sentences):
 	var special_count = 0
 
 	if Global.is_multiplayer_match:
-		# Multiplayer only gets the 5 special cards - no common/legacy/old
-		# action cards from the single-player kit.
-		special_count = generate_multiplayer_special_cards()
+		# Multiplayer only gets its carried-over hand of special cards - no
+		# common/legacy/old action cards from the single-player kit.
+		special_count = generate_multiplayer_hand()
 	else:
 		generate_common_cards(sentences)
 		generate_legacy_cards(n)
@@ -52,33 +52,41 @@ func generate_deck(n,sentences):
 	Global.run.number_of_total_cards += sentence_count + legacy_count + action_count + special_count
 
 
-	round_deck.shuffle()
+	# Multiplayer's order is already set (see generate_multiplayer_hand).
+	if not Global.is_multiplayer_match:
+		round_deck.shuffle()
 
 	for item in round_deck:
 		generate_card(item["type"], item["content"], item.get("order", 0), item.get("special_action", -1))
 
 
-# Each of these is added to the deck every round until it's actually played,
-# at which point mp_special_cards_used marks it permanently spent for the
-# rest of the match - not just the current round.
-func generate_multiplayer_special_cards() -> int:
-	var specials = {
-		"double_down": Card.Action_sub_type.double_down,
-		"letter_snipe": Card.Action_sub_type.letter_snipe,
-		"letter_reveal": Card.Action_sub_type.letter_reveal,
-		"freeze": Card.Action_sub_type.freeze,
-		"chunk_scramble": Card.Action_sub_type.chunk_scramble,
-	}
-	var count = 0
-	for key in specials:
-		if not Global.run.mp_special_cards_used.get(key, false):
-			round_deck.append({
-				"type": 3,
-				"content": "Special card: %s" % key,
-				"special_action": specials[key],
-			})
-			count += 1
-	return count
+# First round: deals the same MP_STARTING_HAND_SIZE random specials to both
+# players - shuffled with an RNG seeded by the shared match seed, so both
+# clients pick the same ones. After that the hand just carries over
+# (Run.mp_hand). draw_card() takes from the top (end of round_deck), so it's
+# added in reverse to keep the hand's order.
+func generate_multiplayer_hand() -> int:
+	if not Global.run.mp_hand_dealt:
+		var specials = [
+			Card.Action_sub_type.double_down,
+			Card.Action_sub_type.letter_snipe,
+			Card.Action_sub_type.letter_reveal,
+			Card.Action_sub_type.freeze,
+			Card.Action_sub_type.chunk_scramble,
+		]
+		var rng = RandomNumberGenerator.new()
+		rng.seed = Global.multiplayer_article_seed
+		for i in range(specials.size() - 1, 0, -1):  # Fisher-Yates on our own RNG
+			var j = rng.randi_range(0, i)
+			var tmp = specials[i]
+			specials[i] = specials[j]
+			specials[j] = tmp
+		Global.run.mp_hand = specials.slice(0, Article.MP_STARTING_HAND_SIZE)
+		Global.run.mp_hand_dealt = true
+
+	for i in range(Global.run.mp_hand.size() - 1, -1, -1):
+		round_deck.append({"type": 3, "content": "Special card", "special_action": Global.run.mp_hand[i]})
+	return Global.run.mp_hand.size()
 
 func generate_card(type, content, order:int = 0, special_action = -1):
 	var card = CardScene.instantiate()
@@ -180,29 +188,29 @@ func generate_card(type, content, order:int = 0, special_action = -1):
 			effect_text.text = "-20"
 		elif card.action_type == 12:
 			card_title.text = "Double Down"
-			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead. Once per match."
+			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead."
 			effect_symbol.texture = load("res://assets/sprites/HP.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "2x"
 		elif card.action_type == 13:
 			card_title.text = "Letter Snipe"
-			card_description.text = "Instantly reveals one random letter in the title. Free. Once per match."
+			card_description.text = "Instantly reveals one random letter in the title. Free."
 			effect_symbol.texture = load("res://assets/sprites/mana.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "1x"
 		elif card.action_type == 14:
 			card_title.text = "Letter Reveal"
-			card_description.text = "Submit one letter next to reveal every match in the title. Once per match."
+			card_description.text = "Submit one letter next to reveal every match in the title."
 			effect_symbol.texture = load("res://assets/sprites/mana.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "1x"
 		elif card.action_type == 15:
 			card_title.text = "Freeze"
-			card_description.text = "Opponent can't submit guesses for 2 seconds. Once per match."
+			card_description.text = "Opponent can't submit guesses for 2 seconds."
 			effect_text.text = "2s"
 		elif card.action_type == 16:
 			card_title.text = "Static"
-			card_description.text = "Scrambles the order of the opponent's revealed text for 5 seconds. Once per match."
+			card_description.text = "Scrambles the order of the opponent's revealed text for 5 seconds."
 			effect_text.text = "5s"
 		elif card.action_type == 17:
 			var heal_amount = Card.mp_heal_amount(Global.run.round_number)

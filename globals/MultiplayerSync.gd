@@ -1,7 +1,7 @@
 extends Node
 
 signal opponent_vitals_updated(hp: int, max_hp: int, mana: int, max_mana: int)
-signal opponent_guess_result(correct: bool, damage: int)
+signal opponent_guess_result(correct: bool, damage: int, guess: String)
 signal opponent_match_over(outcome: String)
 signal dummy_damage_taken(amount: int)
 signal you_were_frozen(duration: float)
@@ -16,7 +16,7 @@ signal reward_none
 
 # In-match chat (MultiplayerBoard's ChatPanel). The board is rebuilt every
 # round, so the history lives here instead and the board replays it on load.
-signal chat_message_added(sender_name: String, text: String)
+signal chat_message_added(sender_name: String, text: String, is_own: bool)
 
 # Fired by MultiplayerLobby's own handshake (see start_as_host/start_as_guest
 # below) once both sides have confirmed a working message channel, and on
@@ -33,7 +33,7 @@ const MAX_CHAT_HISTORY := 100
 
 var _opponent_id: int = 0
 var _connected: bool = false
-var chat_history: Array = []  # [{"name": String, "text": String}]
+var chat_history: Array = []  # [{"name": String, "text": String, "own": bool}]
 
 
 func _ready() -> void:
@@ -91,7 +91,7 @@ func _handle_message(msg: Dictionary) -> void:
 			Global.last_known_opponent_max_mana = msg.max_mana
 			opponent_vitals_updated.emit(msg.hp, msg.max_hp, msg.mana, msg.max_mana)
 		"guess_result":
-			opponent_guess_result.emit(msg.correct, msg.damage)
+			opponent_guess_result.emit(msg.correct, msg.damage, str(msg.get("guess", "")))
 		"match_over":
 			opponent_match_over.emit(msg.outcome)
 		"freeze":
@@ -105,7 +105,7 @@ func _handle_message(msg: Dictionary) -> void:
 		"reward_none":
 			reward_none.emit()
 		"chat":
-			_add_chat(Global.multiplayer_opponent_name, str(msg.get("text", "")))
+			_add_chat(Global.multiplayer_opponent_name, str(msg.get("text", "")), false)
 		"player_left":
 			_on_opponent_left()
 
@@ -156,7 +156,9 @@ func send_vitals(hp: int, max_hp: int, mana: int, max_mana: int) -> void:
 	_send_raw({"type": "vitals", "hp": hp, "max_hp": max_hp, "mana": mana, "max_mana": max_mana})
 
 
-func send_guess_result(correct: bool, damage: int = 0) -> void:
+# guess is the text the player typed (only sent for a correct guess) - the
+# loser's board shows it in the answer box.
+func send_guess_result(correct: bool, damage: int = 0, guess: String = "") -> void:
 	if Global.is_dummy_opponent:
 		# There's no real peer to message in dummy mode - a correct guess
 		# there deals damage straight to the dummy so the new reveal/damage
@@ -166,7 +168,7 @@ func send_guess_result(correct: bool, damage: int = 0) -> void:
 		return
 	if not _is_connected():
 		return
-	_send_raw({"type": "guess_result", "correct": correct, "damage": damage})
+	_send_raw({"type": "guess_result", "correct": correct, "damage": damage, "guess": guess.left(MAX_CHAT_LENGTH)})
 
 
 func send_freeze_opponent(duration: float = 2.0) -> void:
@@ -222,7 +224,7 @@ func send_chat(text: String) -> void:
 	text = text.strip_edges().left(MAX_CHAT_LENGTH)
 	if text.is_empty():
 		return
-	_add_chat(Global.get_own_name(), text)
+	_add_chat(Global.get_own_name(), text, true)
 	if Global.is_dummy_opponent or not _is_connected():
 		return
 	_send_raw({"type": "chat", "text": text})
@@ -230,17 +232,17 @@ func send_chat(text: String) -> void:
 
 # DummyOpponent's stand-in for a real opponent's "chat" message.
 func receive_dummy_chat(text: String) -> void:
-	_add_chat(Global.multiplayer_opponent_name, text)
+	_add_chat(Global.multiplayer_opponent_name, text, false)
 
 
-func _add_chat(sender_name: String, text: String) -> void:
+func _add_chat(sender_name: String, text: String, is_own: bool) -> void:
 	text = text.strip_edges().left(MAX_CHAT_LENGTH)
 	if text.is_empty():
 		return
-	chat_history.append({"name": sender_name, "text": text})
+	chat_history.append({"name": sender_name, "text": text, "own": is_own})
 	if chat_history.size() > MAX_CHAT_HISTORY:
 		chat_history.pop_front()
-	chat_message_added.emit(sender_name, text)
+	chat_message_added.emit(sender_name, text, is_own)
 
 
 # Explicit "I'm quitting" notice, sent when the game window is closed mid-

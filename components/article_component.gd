@@ -14,8 +14,9 @@ var DeckScene = preload("res://scenes/Deck.tscn")
 var BoardScene = preload("res://scenes/Board.tscn")
 var MultiplayerBoardScene = preload("res://scenes/MultiplayerBoard.tscn")
 
-# Multiplayer hand cap - extra cards wait in the deck (see draw_initial_cards).
-const MP_MAX_HAND_SIZE := 6
+# Multiplayer's first-round hand - both players get the same cards (see
+# Deck.generate_multiplayer_hand).
+const MP_STARTING_HAND_SIZE := 3
 
 var hc_article_id: int
 var hc_article_title
@@ -310,7 +311,6 @@ func initialize_game_components(article_data: Dictionary):
 	
 	current_deck.generate_deck(Global.run.current_round.article_chunks.size(), Global.run.current_round.article_chunks)
 	Global.run.current_round.current_deck_card_count = current_deck.round_deck.size()
-	add_reward_cards_to_deck()
 
 	draw_initial_cards()
 	update_board_title()
@@ -327,24 +327,11 @@ func create_board():
 	get_parent().add_child(current_board)
 
 func draw_initial_cards():
-	# Multiplayer's deck is the unplayed specials plus owned reward cards -
-	# draw as many as fit in the hand (MP_MAX_HAND_SIZE). The rest stay in the
-	# deck and come in one at a time as cards are played (play_card draws a
-	# replacement), and anything still unplayed is dealt again next round.
-	# Single-player still draws a random hand_size subset.
-	var count = min(Global.run.current_round.current_deck_card_count, MP_MAX_HAND_SIZE) if Global.is_multiplayer_match else Global.run.hand_size
+	# Multiplayer's deck is exactly its carried-over hand (Run.mp_hand) - deal
+	# all of it. Single-player still draws a random hand_size subset.
+	var count = Global.run.current_round.current_deck_card_count if Global.is_multiplayer_match else Global.run.hand_size
 	for i in range(count):
 		current_deck.draw_card()
-
-# Owned, unplayed multiplayer reward cards (see Run.mp_reward_cards) go on
-# top of the deck, so they're drawn before the regular specials.
-func add_reward_cards_to_deck() -> void:
-	if not Global.is_multiplayer_match:
-		return
-	for action in Global.run.mp_reward_cards:
-		var card = current_deck.generate_card(3, "Reward card", 0, action)
-		card.is_mp_reward = true
-	Global.run.current_round.current_deck_card_count += Global.run.mp_reward_cards.size()
 
 func update_board_title():
 	if Global.run.current_round.current_board:
@@ -423,7 +410,15 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 				if clean_lowercase_word.find(clean_title_word) != -1 or Global.similarity_ratio(clean_lowercase_word, clean_title_word) > 0.9:
 					should_censor = true
 					break
-		
+
+		# Pieces of a compound title word, e.g. "kilo-", "gram", "kilos" for
+		# "Kilogram" - the checks above only catch words containing the title.
+		if not should_censor:
+			for clean_title_word in cleaned_title_words:
+				if is_title_word_part(clean_lowercase_word, clean_title_word):
+					should_censor = true
+					break
+
 		if should_censor:
 			var censored = ""
 			for j in range(original_word.length()):
@@ -431,6 +426,24 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 			words[i] = censored
 	
 	return " ".join(words)
+
+
+# True when `word` is the leading or trailing part of `title_word` (plural
+# "s"/"es" allowed), at least 4 letters - "gram"/"kilos" for "kilogram". Only
+# prefix/suffix so random inner fragments don't count.
+func is_title_word_part(word: String, title_word: String) -> bool:
+	var stem = word.replace("-", "").replace("\"", "").replace("'", "")
+	var candidates = [stem]
+	if stem.ends_with("es"):
+		candidates.append(stem.left(-2))
+	if stem.ends_with("s"):
+		candidates.append(stem.left(-1))
+	for candidate in candidates:
+		if candidate.length() < 4 or candidate.length() >= title_word.length():
+			continue
+		if title_word.begins_with(candidate) or title_word.ends_with(candidate):
+			return true
+	return false
 
 
 # Wikipedia's lead sentence pattern is roughly:
