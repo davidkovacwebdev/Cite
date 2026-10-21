@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://bnmkd0r15u7ki" path="res://assets/sprites/davidovac_logosmall.png" id="3"]
 
 [sub_resource type="Gradient" id="Gradient_vnd6o"]
-colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.14, 0.06, 0.28, 1)
+colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.53, 0.36, 0.82, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_6aewd"]
 gradient = SubResource("Gradient_vnd6o")
@@ -570,6 +570,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="ChatInput" type="LineEdit" parent="RoomContainer/RoomColumns/MiddlePanel/ChatRow"]
+keep_editing_on_text_submit = true
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

@@ -907,11 +907,13 @@ func _send_chat() -> void:
 	if dummy_lobby:
 		_add_player_chat(host_id, text)  # no Steam lobby to echo it back
 		%ChatInput.clear()
+		%ChatInput.grab_focus()
 		return
 	# Steam echoes lobby chat back to the sender too, so the message is added
 	# to the log when it arrives in _on_lobby_message, not here.
 	_send_lobby_message(MSG_CHAT, text)
 	%ChatInput.clear()
+	%ChatInput.grab_focus()  # keep typing - also after clicking Send
 
 
 func _add_player_chat(user: int, text: String) -> void:

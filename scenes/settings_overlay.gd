@@ -2,18 +2,20 @@ extends CanvasLayer
 
 class_name SettingsOverlay
 
-# In-match settings: the main menu's settings (fullscreen + volumes) plus a few
-# game options, shown as a transparent overlay over the multiplayer match.
+# In-match settings: the main menu's volume settings plus a few game options
+# and Leave match, shown as a transparent overlay over the multiplayer match.
 # Toggled with Esc or the small button in the bottom-left corner. The match
 # keeps running underneath - there's no pausing in multiplayer.
 
 const SETTINGS_PATH := "user://scene_data.tres"
 const PANEL_WIDTH := 380
+const LEAVE_WARNING_COLOR := Color(1.0, 0.45, 0.45)
 
 var settings: SaveData
 var panel_root: Control
-var fullscreen_check: CheckBox
 var text_size_label: Label
+var leave_button: Button
+var leave_warning: Label
 
 
 func _ready() -> void:
@@ -33,7 +35,6 @@ func _ready() -> void:
 
 	_build_panel()
 	panel_root.visible = false
-	get_window().size_changed.connect(_sync_fullscreen_checkbox)
 
 
 func _exit_tree() -> void:
@@ -56,7 +57,8 @@ func toggle() -> void:
 	if panel_root.visible:
 		# Otherwise Enter would still submit a guess or chat line behind it.
 		get_viewport().gui_release_focus()
-		_sync_fullscreen_checkbox()
+	else:
+		_reset_leave_confirm()
 	SoundManagerScript.play_random_click("SFX")
 
 
@@ -88,10 +90,6 @@ func _build_panel() -> void:
 
 	column.add_child(_heading("Settings", 28))
 
-	fullscreen_check = _checkbox("Fullscreen")
-	fullscreen_check.toggled.connect(_on_fullscreen_toggled)
-	column.add_child(fullscreen_check)
-
 	column.add_child(_volume_slider("Master Volume", SoundManagerScript.master_volume, _on_master_volume_changed))
 	column.add_child(_volume_slider("SFX Volume", SoundManagerScript.sfx_volume, _on_sfx_volume_changed))
 	column.add_child(_volume_slider("Music Volume", SoundManagerScript.music_volume, _on_music_volume_changed))
@@ -122,6 +120,22 @@ func _build_panel() -> void:
 	_update_text_size_label()
 
 	column.add_child(HSeparator.new())
+	# Leaving forfeits, so it takes a second click to confirm.
+	leave_button = Button.new()
+	leave_button.text = "Leave match"
+	leave_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	leave_button.custom_minimum_size = Vector2(140, 0)
+	leave_button.pressed.connect(_on_leave_pressed)
+	column.add_child(leave_button)
+	leave_warning = Label.new()
+	leave_warning.text = "%s will win the match. Click again to leave." % Global.multiplayer_opponent_name
+	leave_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	leave_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	leave_warning.add_theme_font_size_override("font_size", 14)
+	leave_warning.add_theme_color_override("font_color", LEAVE_WARNING_COLOR)
+	leave_warning.visible = false
+	column.add_child(leave_warning)
+
 	var close_button = Button.new()
 	close_button.text = "Close"
 	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -187,15 +201,20 @@ func _save() -> void:
 	ResourceSaver.save(settings, SETTINGS_PATH)
 
 
-func _on_fullscreen_toggled(toggled_on: bool) -> void:
-	get_window().mode = Window.MODE_FULLSCREEN if toggled_on else Window.MODE_WINDOWED
-	settings.fullscreen = toggled_on
-	_save()
+func _on_leave_pressed() -> void:
 	SoundManagerScript.play_random_click("SFX")
+	if not leave_warning.visible:
+		leave_warning.visible = true
+		leave_button.text = "Leave anyway"
+		return
+	# Same as losing on HP: the opponent is told they won.
+	Global.end_multiplayer_match("lost")
+	get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
 
 
-func _sync_fullscreen_checkbox() -> void:
-	fullscreen_check.set_pressed_no_signal(get_window().mode == Window.MODE_FULLSCREEN)
+func _reset_leave_confirm() -> void:
+	leave_warning.visible = false
+	leave_button.text = "Leave match"
 
 
 func _on_master_volume_changed(value: float) -> void:

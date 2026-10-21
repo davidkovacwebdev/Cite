@@ -2,13 +2,13 @@
 
 [ext_resource type="Script" uid="uid://camva74p8l5er" path="res://Main/main.gd" id="1_lxy7q"]
 [ext_resource type="Shader" uid="uid://bdryfs14vcjhg" path="res://scenes/background_scroll.gdshader" id="2_amygn"]
-[ext_resource type="Texture2D" uid="uid://ch6qtcgli06gj" path="res://assets/sprites/davidovac_logo.png" id="3_amygn"]
+[ext_resource type="Texture2D" uid="uid://biohfbqu7levh" path="res://assets/sprites/cite_logo_purple.png" id="3_amygn"]
 [ext_resource type="Texture2D" uid="uid://bnmkd0r15u7ki" path="res://assets/sprites/davidovac_logosmall.png" id="3_ps1la"]
 [ext_resource type="AudioStream" uid="uid://b350210d6og6h" path="res://assets/sounds/sfx/click/click2.wav" id="5_6aewd"]
 [ext_resource type="Shader" uid="uid://mwp812r480fx" path="res://Main/Main.gdshader" id="6_u2i7p"]
 
 [sub_resource type="Gradient" id="Gradient_vnd6o"]
-colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.14, 0.06, 0.28, 1)
+colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.53, 0.36, 0.82, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_6aewd"]
 gradient = SubResource("Gradient_vnd6o")
@@ -254,7 +254,7 @@ offset_left = 427.0
 offset_top = 579.0
 offset_right = 727.0
 offset_bottom = 679.0
-theme_override_colors/default_color = Color(0.279357, 0.279357, 0.279357, 1)
+theme_override_colors/default_color = Color(0.89, 0.76, 1, 1)
 theme_override_font_sizes/normal_font_size = 12
 text = "Dont you want me like I want you baby, don't you need me like I need you now"
 fit_content = true
