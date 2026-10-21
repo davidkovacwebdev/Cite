@@ -44,6 +44,8 @@ content_margin_bottom = 8.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qails"]
 bg_color = Color(0.114, 0.122, 0.141, 1)
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 18
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
@@ -65,7 +67,7 @@ spacing_glyph = 2
 resource_local_to_scene = true
 shader = ExtResource("3_rounded")
 shader_parameter/color = Color(0.533, 0.341, 0.71, 1)
-shader_parameter/size = Vector2(12, 280)
+shader_parameter/size = Vector2(12, 380)
 shader_parameter/radius = 6.0
 shader_parameter/glow_strength = 0.35
 shader_parameter/glow_width = 0.2
@@ -113,9 +115,9 @@ visible = false
 z_index = 100
 layout_mode = 0
 offset_left = 476.0
-offset_top = 254.0
+offset_top = 196.0
 offset_right = 676.0
-offset_bottom = 394.0
+offset_bottom = 336.0
 mouse_filter = 2
 theme_override_colors/default_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/normal_font_size = 96
@@ -133,10 +135,10 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 312.0
-offset_top = 114.0
-offset_right = 324.0
-offset_bottom = 394.0
+offset_left = 266.0
+offset_top = 80.0
+offset_right = 278.0
+offset_bottom = 460.0
 grow_horizontal = 0
 grow_vertical = 0
 color = Color(1, 1, 1, 1)
@@ -149,10 +151,10 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 332.0
-offset_top = 114.0
-offset_right = 832.0
-offset_bottom = 394.0
+offset_left = 286.0
+offset_top = 80.0
+offset_right = 866.0
+offset_bottom = 460.0
 grow_horizontal = 0
 grow_vertical = 0
 horizontal_scroll_mode = 3
@@ -163,28 +165,18 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="GuessLabel" type="RichTextLabel" parent="."]
-layout_mode = 0
-offset_left = 40.0
-offset_top = 260.0
-offset_right = 240.0
-offset_bottom = 286.0
-theme_override_colors/default_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/normal_font_size = 20
-bbcode_enabled = false
-text = "YOUR GUESS"
-fit_content = true
-
 [node name="InputField" type="LineEdit" parent="."]
+visible = false
+z_index = 50
 layout_mode = 0
-offset_left = 40.0
-offset_top = 290.0
-offset_right = 240.0
-offset_bottom = 330.0
+offset_left = 356.0
+offset_top = 240.0
+offset_right = 796.0
+offset_bottom = 290.0
 theme_override_colors/selection_color = Color(0.407843, 0.537255, 0.956863, 1)
 theme_override_colors/font_placeholder_color = Color(0.55, 0.57, 0.62, 1)
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 24
 theme_override_styles/focus = SubResource("StyleBoxFlat_hs2ul")
 theme_override_styles/normal = SubResource("StyleBoxFlat_qails")
 placeholder_text = "What's the article?"
@@ -193,25 +185,27 @@ script = ExtResource("2_hs2ul")
 
 [node name="LetterRevealHint" type="Label" parent="."]
 visible = false
+z_index = 50
 layout_mode = 0
-offset_left = 40.0
-offset_top = 334.0
-offset_right = 240.0
-offset_bottom = 356.0
+offset_left = 356.0
+offset_top = 296.0
+offset_right = 796.0
+offset_bottom = 318.0
 theme_override_colors/font_color = Color(0.470588, 1, 0.403922, 1)
 theme_override_font_sizes/font_size = 16
 text = "Guess one letter"
 horizontal_alignment = 1
 
-[node name="ArticleTitleLabel" type="RichTextLabel" parent="."]
+[node name="StakeLabel" type="Label" parent="."]
 layout_mode = 0
-offset_top = 5.0
-offset_right = 250.0
-offset_bottom = 45.0
-theme_override_font_sizes/normal_font_size = 26
-text = "Article Title:"
-fit_content = true
+offset_left = 376.0
+offset_top = 8.0
+offset_right = 776.0
+offset_bottom = 34.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="ArticleTitle" type="RichTextLabel" parent="."]
 layout_mode = 0
@@ -223,17 +217,6 @@ fit_content = true
 scroll_active = false
 autowrap_mode = 0
 horizontal_alignment = 1
-
-[node name="RoundCounter" type="RichTextLabel" parent="."]
-layout_mode = 0
-offset_left = 40.0
-offset_top = 196.0
-offset_right = 240.0
-offset_bottom = 236.0
-theme_override_colors/default_color = Color(0.68, 0.36, 1, 1)
-theme_override_font_sizes/normal_font_size = 30
-fit_content = true
-autowrap_mode = 0
 
 [node name="LegacyEffects" type="RichTextLabel" parent="."]
 visible = false

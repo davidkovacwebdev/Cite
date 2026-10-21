@@ -3,7 +3,7 @@ extends Control
 class_name MultiplayerBoard
 
 const MAX_GUESS_DAMAGE := 600.0
-const TIMER_BAR_HEIGHT := 280.0
+const TIMER_BAR_HEIGHT := 380.0
 const GRACE_PERIOD_SECONDS := 5.0
 const GRACE_COLOR := Color(0.749, 0.161, 0.161, 1)
 # A title letter is auto-revealed on every Nth chunk reveal (see
@@ -40,6 +40,9 @@ const COUNTDOWN_TICK_PITCH_VARIATION := 0.08
 # Where the riser's abrupt cut-off sits in the file (a short release tail
 # follows) - this is the moment lined up with the timer running out.
 const TIMER_RISER_PEAK_SECONDS := 12.0
+const TITLE_Y := 36.0
+const STAKE_COLOR := Color(0.85, 0.86, 0.9)
+const STAKE_DOUBLED_COLOR := Color(1.0, 0.62, 0.25)
 const CHAT_MESSAGE_COLOR := "#e6e6e6"
 const CHAT_OWN_NAME_COLOR := "#7ee0a1"
 const CHAT_OPPONENT_NAME_COLOR := "#ff6b6b"
@@ -84,6 +87,12 @@ var timer_charge_players: Array[AudioStreamPlayer] = []
 var timer_charge_index: int = 0
 var in_grace_period: bool = false
 var frozen: bool = false
+# The guess field only shows while typing a guess: Enter opens it, Enter
+# again submits, Esc (or Backspace on an empty field) cancels.
+var guess_open: bool = false
+var guess_checking: bool = false
+var _base_chunk_font_size: int
+var _base_title_font_size: int
 var _reward_picked_key: String = ""
 var _pending_reward_picker_info: Array = []
 var _pending_reward_picker_ready: bool = false
@@ -101,6 +110,7 @@ func _ready() -> void:
 	# into a fresh round (with a different title) would be confusing. The
 	# card that armed it is already gone from the hand either way.
 	Global.run.double_down_armed = false
+	Global.opponent_double_down_armed = false
 	Global.run.letter_reveal_armed = false
 
 	MultiplayerSync.opponent_guess_result.connect(_on_opponent_guess_result)
@@ -128,16 +138,20 @@ func _ready() -> void:
 	_pending_card_reward_ready = false
 	_pending_card_reward_winner_action = -1
 
-	$RoundCounter.text = "Round %d" % Global.run.round_number
-	$ArticleTitleLabel.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
-	$ArticleTitle.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
-	$ArticleTitle.position.y = 40
+	$ArticleTitle.position.y = TITLE_Y
+	_center_title()
+	# The text size option can grow the title past its default width.
+	$ArticleTitle.resized.connect(_center_title)
 	$InputField.reset_border()
 	$ArticleTitle.add_theme_constant_override("letter_spacing", 102)
 
 	if Global.run.current_round.article_chunks:
 		chunks = Global.run.current_round.article_chunks
 	update_board_chunks()
+	_base_chunk_font_size = $ScrollContainer.get_theme_font_size("normal_font_size", "RichTextLabel")
+	_base_title_font_size = $ArticleTitle.get_theme_font_size("normal_font_size")
+	apply_text_size()
+	Global.match_display_settings_changed.connect(apply_text_size)
 
 	if chunks:
 		reveal_order = range(chunks.size())
@@ -280,6 +294,7 @@ func _on_grace_period_expired() -> void:
 	if round_advancing or Global.multiplayer_match_over or not is_inside_tree():
 		return
 	round_advancing = true
+	close_guess()
 	# Nobody got it - show the answer, in the title bar and as the banner.
 	var title: String = Global.run.current_round.article_title
 	Global.run.current_round.article_censored_title = title
@@ -369,6 +384,7 @@ func _current_guess_damage() -> int:
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
+	_update_stake_label()
 	if not round_started or reveal_timer.time_left <= 0.0 or reveal_timer.wait_time <= 0.0:
 		return
 	# Drains from full height down to 0, top edge sinking toward the fixed
@@ -404,7 +420,7 @@ func reveal_chunk(index: int, chunk:String):
 			0.5
 		)
 
-		if is_inside_tree() and get_tree():
+		if Global.auto_scroll_to_reveal and is_inside_tree() and get_tree():
 			await get_tree().process_frame # Wait one frame for layout to update
 			scroll.scroll_vertical = label.position.y
 
@@ -428,42 +444,80 @@ func update_board_chunks():
 		vbox.add_child(label)
 
 
-func _input(event):
-	if not round_started or round_advancing or frozen:
+func open_guess() -> void:
+	if guess_open or not round_started or round_advancing:
 		return
-	if %ChatInput.has_focus():
+	guess_open = true
+	$InputField.text = ""
+	$InputField.reset_border()
+	$InputField.visible = true
+	$LetterRevealHint.visible = Global.run.letter_reveal_armed
+	$InputField.grab_focus()
+
+
+func close_guess() -> void:
+	guess_open = false
+	$InputField.text = ""
+	$InputField.visible = false
+	$LetterRevealHint.visible = false
+	$InputField.release_focus()
+
+
+func _input(event):
+	if not (event is InputEventKey and event.pressed and not event.is_echo()):
+		return
+	if %ChatInput.has_focus() or Global.settings_overlay_open:
 		return  # Enter here sends chat (_on_chat_submitted), not a guess
-	if event is InputEventKey and event.pressed and not event.is_echo() and event.keycode == KEY_ENTER:
-		if Global.run.letter_reveal_armed:
-			var letter = $InputField.text.strip_edges()
-			Global.run.letter_reveal_armed = false
-			update_letter_reveal_hint(false)
-			$InputField.text = ""
-			if letter != "":
-				Global.run.current_round.reveal_letter_value(letter.left(1))
-			return
+	var is_enter = event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER
+	if guess_open and (event.keycode == KEY_ESCAPE or (event.keycode == KEY_BACKSPACE and $InputField.text.is_empty())):
+		close_guess()
+		get_viewport().set_input_as_handled()
+		return
+	if not is_enter or not round_started or round_advancing:
+		return
+	get_viewport().set_input_as_handled()
+	if not guess_open:
+		open_guess()
+		return
+	if frozen:
+		return  # field stays open - submit again once the freeze wears off
+	if guess_checking:
+		return  # still flashing the last wrong guess
+	var typed = $InputField.text.strip_edges()
+	if typed.is_empty():
+		close_guess()
+		return
 
-		var guess = simplify_string($InputField.text.strip_edges().to_lower())
-		var solution = simplify_string(Global.run.current_round.article_title.strip_edges().to_lower())
-		var alternative_solution =  simplify_string(Global.run.current_round.article_alternative_title.strip_edges().to_lower())
-		if Global.is_guess_match(guess, solution) or Global.is_guess_match(guess, alternative_solution):
-			correct_guess($InputField.text.strip_edges())
+	if Global.run.letter_reveal_armed:
+		Global.run.letter_reveal_armed = false
+		update_letter_reveal_hint(false)
+		close_guess()
+		Global.run.current_round.reveal_letter_value(typed.left(1))
+		return
 
-		else:
-			$InputField.wrong_border()
-			await get_tree().create_timer(0.5).timeout
-			$InputField.reset_border()
-			if $InputField.text.strip_edges() != "":
-				var self_damage = 50
-				if Global.run.double_down_armed:
-					self_damage = 200
-					Global.run.double_down_armed = false
-				Global.run.Health.damage(self_damage)
-				if Global.multiplayer_match_over:
-					return  # damage() can end the match mid-function - bail before touching the freed scene
-				MultiplayerSync.send_guess_result(false)
-			$InputField.text=""
-			Global.run.number_of_wrong_guesses += 1
+	var guess = simplify_string(typed.to_lower())
+	var solution = simplify_string(Global.run.current_round.article_title.strip_edges().to_lower())
+	var alternative_solution =  simplify_string(Global.run.current_round.article_alternative_title.strip_edges().to_lower())
+	if Global.is_guess_match(guess, solution) or Global.is_guess_match(guess, alternative_solution):
+		correct_guess(typed)
+		return
+
+	guess_checking = true
+	$InputField.wrong_border()
+	await get_tree().create_timer(0.5).timeout
+	guess_checking = false
+	if not is_inside_tree():
+		return
+	var self_damage = 50
+	if Global.run.double_down_armed:
+		self_damage = 200
+		Global.set_double_down_armed(false)
+	Global.run.Health.damage(self_damage)
+	if Global.multiplayer_match_over:
+		return  # damage() can end the match mid-function - bail before touching the freed scene
+	MultiplayerSync.send_guess_result(false)
+	close_guess()
+	Global.run.number_of_wrong_guesses += 1
 
 # typed_guess is what the player entered, shown on the opponent's screen -
 # empty when a Letter Reveal completed the title instead.
@@ -488,15 +542,16 @@ func correct_guess(typed_guess: String = ""):
 	var damage = _current_guess_damage()
 	if Global.run.double_down_armed:
 		damage *= 2
-		Global.run.double_down_armed = false
+		Global.set_double_down_armed(false)
 	MultiplayerSync.send_guess_result(true, damage, typed_guess)
+	# The opponent's own Double Down doubles it again on their side.
+	var damage_dealt = damage * 2 if Global.opponent_double_down_armed else damage
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return  # dummy-opponent mode routes this synchronously all the way through DummyOpponent -> opponent_match_over -> change_scene_to_file, unlike a real match where this just fires off an async network message - a killing blow here can end the match and free this scene before the next line runs
 
-	$InputField.text = "Bingooo"
+	close_guess()
 	$ArticleTitle.text = Global.run.current_round.article_title
-	$InputField.success_border()
-	get_parent().show_banner("-%d" % damage, Round.DAMAGE_DEALT_COLOR)
+	get_parent().show_banner("-%d" % damage_dealt, Round.DAMAGE_DEALT_COLOR)
 	await get_tree().create_timer(2).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
@@ -676,7 +731,7 @@ func _build_reward_card_visual(key: String) -> Card:
 	match key:
 		"double_down":
 			card_title.text = "Double Down"
-			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead."
+			card_description.text = "Next correct guess deals 2x damage (including your opponent's).\nA wrong guess costs you 200 HP."
 			effect_symbol.texture = load("res://assets/sprites/HP.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "2x"
@@ -895,9 +950,13 @@ func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> voi
 	if not correct or round_advancing or Global.multiplayer_match_over or not is_inside_tree():
 		return
 	round_advancing = true
+	close_guess()
 	reveal_timer.stop()  # pause chunk reveals until the next round starts
 	_stop_timer_charge()
 	Global.run.current_round.card_playable = false
+	if Global.run.double_down_armed:
+		damage *= 2  # our Double Down backfired - they guessed first
+		Global.set_double_down_armed(false)
 	Global.run.Health.damage(damage)
 	if Global.multiplayer_match_over:
 		return  # damage() can end the match mid-function - bail before touching the freed scene
@@ -932,12 +991,41 @@ func _advance_round(i_am_winner: bool = true) -> void:
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return  # match already ended (e.g. opponent's match-over RPC beat us here) - scene may be gone
 	Global.run.round_number += 1
-	$RoundCounter.text = "Round %d" % Global.run.round_number
 	if Global.run.last_article == true:
 		Global.end_multiplayer_match("won" if i_am_winner else "lost")
 		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
 	else:
 		Global.run.current_round.end_round()
+
+
+# What's riding on this round right now: the damage a correct guess deals -
+# whoever makes it. Double Down doubles it both ways, so either player's
+# armed card applies to both directions.
+func _update_stake_label() -> void:
+	var multiplier = 1
+	if Global.run.double_down_armed:
+		multiplier *= 2
+	if Global.opponent_double_down_armed:
+		multiplier *= 2
+	var stake = _current_guess_damage() * multiplier
+	if multiplier > 1:
+		$StakeLabel.text = "Damage: %d (x%d)" % [stake, multiplier]
+		$StakeLabel.add_theme_color_override("font_color", STAKE_DOUBLED_COLOR)
+	else:
+		$StakeLabel.text = "Damage: %d" % stake
+		$StakeLabel.add_theme_color_override("font_color", STAKE_COLOR)
+
+
+func _center_title() -> void:
+	$ArticleTitle.position.x = (get_viewport_rect().size.x / 2) - ($ArticleTitle.size.x / 2)
+
+
+# Article text + title font size, shifted by the settings overlay's -/+ option.
+func apply_text_size() -> void:
+	var offset = Global.article_text_size_offset
+	for label in $ScrollContainer/VBoxContainer.get_children():
+		label.add_theme_font_size_override("normal_font_size", _base_chunk_font_size + offset)
+	$ArticleTitle.add_theme_font_size_override("normal_font_size", _base_title_font_size + offset)
 
 
 func update_board_title():
@@ -955,8 +1043,10 @@ func update_board_title():
 # field to one character while active so there's no ambiguity about what
 # "submit one letter" means, on top of _input()'s own letter.left(1).
 func update_letter_reveal_hint(active: bool) -> void:
-	$LetterRevealHint.visible = active
+	$LetterRevealHint.visible = active and guess_open
 	$InputField.max_length = 1 if active else 0
+	if active:
+		open_guess()  # straight into typing the letter
 
 
 func get_title_count(text: String) -> int:

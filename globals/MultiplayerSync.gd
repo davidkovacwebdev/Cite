@@ -98,6 +98,8 @@ func _handle_message(msg: Dictionary) -> void:
 			you_were_frozen.emit(msg.duration)
 		"scramble":
 			chunks_scrambled.emit(msg.duration)
+		"double_down":
+			Global.opponent_double_down_armed = bool(msg.get("armed", false))
 		"card_reward":
 			card_reward_received.emit(msg.winner_action, msg.loser_action)
 		"reward_picker_started":
@@ -169,6 +171,12 @@ func send_guess_result(correct: bool, damage: int = 0, guess: String = "") -> vo
 	if not _is_connected():
 		return
 	_send_raw({"type": "guess_result", "correct": correct, "damage": damage, "guess": guess.left(MAX_CHAT_LENGTH)})
+
+
+func send_double_down_state(armed: bool) -> void:
+	if Global.is_dummy_opponent or not _is_connected():
+		return
+	_send_raw({"type": "double_down", "armed": armed})
 
 
 func send_freeze_opponent(duration: float = 2.0) -> void:

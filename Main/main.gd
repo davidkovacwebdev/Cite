@@ -329,9 +329,10 @@ func populate_category_scrollcontainer(categories: Array):
 	for category in categories:
 		var checkbox = CheckBox.new()
 		checkbox.text = category
-		checkbox.add_theme_color_override("font_color", Color.BLACK)
-		checkbox.add_theme_color_override("font_pressed_color", Color.BLACK)
-		checkbox.add_theme_color_override("font_focus_color", Color.BLACK)
+		checkbox.add_theme_color_override("font_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_pressed_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_focus_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_hover_color", Color.WHITE)
 		checkbox.toggled.connect(_on_any_checkbox_toggled.bind(checkbox))
 		vbox.add_child(checkbox)
 
@@ -342,9 +343,10 @@ func populate_playset_scrollcontainer(playsets: Array):
 	for playset in playsets:
 		var checkbox = CheckBox.new()
 		checkbox.text = playset
-		checkbox.add_theme_color_override("font_color", Color.BLACK)
-		checkbox.add_theme_color_override("font_pressed_color", Color.BLACK)
-		checkbox.add_theme_color_override("font_focus_color", Color.BLACK)
+		checkbox.add_theme_color_override("font_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_pressed_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_focus_color", Color.WHITE)
+		checkbox.add_theme_color_override("font_hover_color", Color.WHITE)
 		checkbox.toggled.connect(_on_any_checkbox_toggled.bind(checkbox))
 		vbox.add_child(checkbox)
 		

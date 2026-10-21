@@ -1,8 +1,15 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://components/opponent_panel.gd" id="1_op4n1"]
 [ext_resource type="PackedScene" uid="uid://dlevdyeobm24l" path="res://components/HealthComponent.tscn" id="2_health"]
 [ext_resource type="PackedScene" uid="uid://74e7maux53k3" path="res://components/ManaComponent.tscn" id="3_mana"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_playerbox"]
+bg_color = Color(0.55, 0.56, 0.62, 0.16)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [node name="OpponentPanel" type="Control"]
 layout_mode = 3
@@ -13,6 +20,15 @@ offset_top = 8.0
 offset_right = 1144.0
 offset_bottom = 134.0
 script = ExtResource("1_op4n1")
+
+[node name="PlayerBox" type="Panel" parent="."]
+layout_mode = 0
+offset_left = -6.0
+offset_top = -2.0
+offset_right = 252.0
+offset_bottom = 102.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_playerbox")
 
 [node name="HealthDisplay" parent="." instance=ExtResource("2_health")]
 unique_name_in_owner = true

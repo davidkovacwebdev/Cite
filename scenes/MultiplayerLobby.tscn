@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://bnmkd0r15u7ki" path="res://assets/sprites/davidovac_logosmall.png" id="3"]
 
 [sub_resource type="Gradient" id="Gradient_vnd6o"]
-colors = PackedColorArray(0.615804, 0.74274, 1, 1, 0.864675, 0.864675, 0.864675, 1)
+colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.14, 0.06, 0.28, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_6aewd"]
 gradient = SubResource("Gradient_vnd6o")
@@ -170,12 +170,6 @@ theme_override_constants/separation = 16
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="PlaylistPicker" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm/HostColumns"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(440, 330)
-layout_mode = 2
-script = ExtResource("4")
-
 [node name="HostOptions" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm/HostColumns"]
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
@@ -198,12 +192,18 @@ placeholder_text = "Password (optional)"
 max_length = 32
 secret = true
 
+[node name="PlaylistPicker" type="VBoxContainer" parent="CenterContainer/VBoxContainer/HostForm/HostColumns"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(440, 330)
+layout_mode = 2
+script = ExtResource("4")
+
 [node name="HostButtons" type="HBoxContainer" parent="CenterContainer/VBoxContainer/HostForm"]
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 16
 
-[node name="HostBackButton" type="Button" parent="CenterContainer/VBoxContainer/HostForm/HostButtons"]
+[node name="HostBackButton" type="Button" parent="CenterContainer/VBoxContainer/HostForm/HostButtons" groups=["back_button"]]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
@@ -329,7 +329,7 @@ visible = false
 layout_mode = 2
 text = "Open Workshop Agreement"
 
-[node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="BackButton" type="Button" parent="CenterContainer/VBoxContainer" groups=["back_button"]]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Back"
@@ -455,7 +455,7 @@ custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
 text = "Refresh"
 
-[node name="BrowserBackButton" type="Button" parent="BrowserContainer/BrowserButtons"]
+[node name="BrowserBackButton" type="Button" parent="BrowserContainer/BrowserButtons" groups=["back_button"]]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
@@ -599,12 +599,16 @@ text = "Copy Code"
 [node name="RoomBackButton" type="Button" parent="RoomContainer/RoomColumns/MiddlePanel/RoomButtons"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 13
 text = "Leave"
 
 [node name="PlayButton" type="Button" parent="RoomContainer/RoomColumns/MiddlePanel"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 0)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 20
 text = "Play"
 
 [node name="GuestPanel" type="VBoxContainer" parent="RoomContainer/RoomColumns"]

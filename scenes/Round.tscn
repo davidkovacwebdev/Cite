@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://cewhaa218gieq"]
+[gd_scene load_steps=15 format=3 uid="uid://cewhaa218gieq"]
 
 [ext_resource type="Script" uid="uid://cw560bjjdmx46" path="res://scenes/round.gd" id="1_h7of1"]
 [ext_resource type="PackedScene" uid="uid://dlevdyeobm24l" path="res://components/HealthComponent.tscn" id="1_oqe1w"]
@@ -21,6 +21,13 @@ fill_to = Vector2(0, 1)
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_n471t"]
 shader = ExtResource("2_vnd6o")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_playerbox"]
+bg_color = Color(0.55, 0.56, 0.62, 0.16)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [node name="Round" type="Node2D"]
 script = ExtResource("1_h7of1")
@@ -65,6 +72,16 @@ color = Color(0.047, 0.051, 0.067, 1)
 position = Vector2(577, 319)
 
 [node name="ArticleComponent" parent="." instance=ExtResource("3_a4rw8")]
+
+[node name="SelfPlayerBox" type="Panel" parent="."]
+unique_name_in_owner = true
+visible = false
+offset_left = 2.0
+offset_top = 6.0
+offset_right = 260.0
+offset_bottom = 110.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_playerbox")
 
 [node name="Control" type="Control" parent="."]
 layout_mode = 3

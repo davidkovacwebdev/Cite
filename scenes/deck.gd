@@ -188,7 +188,7 @@ func generate_card(type, content, order:int = 0, special_action = -1):
 			effect_text.text = "-20"
 		elif card.action_type == 12:
 			card_title.text = "Double Down"
-			card_description.text = "Guess now for 2x damage.\nA wrong guess deals extra damage to you instead."
+			card_description.text = "Next correct guess deals 2x damage (including your opponent's).\nA wrong guess costs you 200 HP."
 			effect_symbol.texture = load("res://assets/sprites/HP.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "2x"

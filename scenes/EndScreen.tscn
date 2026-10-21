@@ -117,7 +117,7 @@ text = "Your demise was sealed when you failed miserably at guessing the _____ a
 fit_content = true
 autowrap_mode = 0
 
-[node name="Button" type="Button" parent="."]
+[node name="Button" type="Button" parent="." groups=["back_button"]]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 7

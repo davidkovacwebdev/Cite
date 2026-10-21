@@ -123,8 +123,10 @@ Check him out [color=#6e67ff][url=https://www.linkedin.com/in/igor-tim%C4%8Denko
 fit_content = true
 autowrap_mode = 0
 
-[node name="Button" type="Button" parent="Container/ScrollContainer/VBoxContainer" unique_id=1619737201]
+[node name="Button" type="Button" parent="Container/ScrollContainer/VBoxContainer" unique_id=1619737201 groups=["back_button"]]
+custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
+size_flags_horizontal = 4
 text = "Return to Menu"
 
 [connection signal="meta_clicked" from="Container/ScrollContainer/VBoxContainer/Wikipedia" to="." method="_on_wikipedia_meta_clicked"]

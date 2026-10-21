@@ -109,6 +109,27 @@ var return_to_multiplayer_menu: bool = false
 
 var debug_forced_article_id: int = 0
 
+# In-match display options, changed from the settings overlay (Esc) and saved
+# in SaveData. MultiplayerBoard listens for the signal to re-apply them live.
+signal match_display_settings_changed
+const ARTICLE_TEXT_SIZE_OFFSET_MIN := -5
+const ARTICLE_TEXT_SIZE_OFFSET_MAX := 5
+var auto_scroll_to_reveal: bool = true
+var article_text_size_offset: int = 0
+var settings_overlay_open: bool = false
+
+# Double Down: armed by the card until the player's next guess or the round
+# ends. While armed, the opponent's correct guess deals 2x to this player.
+# The opponent's armed state is mirrored here only so the winner's damage
+# number shows the doubled amount - the loser applies the doubling itself.
+var opponent_double_down_armed: bool = false
+
+func set_double_down_armed(armed: bool) -> void:
+	if run.double_down_armed == armed:
+		return
+	run.double_down_armed = armed
+	MultiplayerSync.send_double_down_state(armed)
+
 func broadcast_vitals() -> void:
 	if not is_multiplayer_match or run == null or run.Health == null or run.Mana == null:
 		return
@@ -135,13 +156,29 @@ func _ready():
 	get_tree().set_auto_accept_quit(false)
 
 	run = Run.new()
-	var file = FileAccess.open("res://assets/data/achievements.json", FileAccess.READ)
+	var settings = ResourceLoader.load("user://scene_data.tres") as SaveData
+	if settings:
+		auto_scroll_to_reveal = settings.auto_scroll_to_reveal
+		article_text_size_offset = settings.article_text_size_offset
+	var file =FileAccess.open("res://assets/data/achievements.json", FileAccess.READ)
 	if file:
 		var json_string = file.get_as_text()
 		achievement_data = JSON.parse_string(json_string)
 		print("Loaded Achievements: ", achievement_data) # ADD THIS
 	else:
 		print("Could not find JSON file!")
+
+
+# Esc presses whichever Back/Return button is showing. Buttons opt in via the
+# "back_button" group in their scene; each screen shows at most one at a time.
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.is_echo() and event.keycode == KEY_ESCAPE):
+		return
+	for button in get_tree().get_nodes_in_group("back_button"):
+		if button is BaseButton and button.is_visible_in_tree() and not button.disabled:
+			get_viewport().set_input_as_handled()
+			button.pressed.emit()
+			return
 
 
 func _process(_delta: float) -> void:

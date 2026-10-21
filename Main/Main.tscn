@@ -8,7 +8,7 @@
 [ext_resource type="Shader" uid="uid://mwp812r480fx" path="res://Main/Main.gdshader" id="6_u2i7p"]
 
 [sub_resource type="Gradient" id="Gradient_vnd6o"]
-colors = PackedColorArray(0.62, 0.4, 1, 1, 0.864675, 0.864675, 0.864675, 1)
+colors = PackedColorArray(0.4, 0.19, 0.72, 1, 0.14, 0.06, 0.28, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_6aewd"]
 gradient = SubResource("Gradient_vnd6o")
@@ -136,7 +136,7 @@ visible = false
 layout_mode = 2
 text = "Lobby Dummy"
 
-[node name="MultiplayerBack" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="MultiplayerBack" type="Button" parent="CenterContainer/VBoxContainer" groups=["back_button"]]
 visible = false
 layout_mode = 2
 text = "Back"
@@ -155,7 +155,9 @@ layout_mode = 2
 
 [node name="RichTextLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer/CategorySelection"]
 layout_mode = 2
-theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "Playset selection"
 fit_content = true
 autowrap_mode = 0
@@ -174,7 +176,9 @@ layout_mode = 2
 
 [node name="RichTextLabel2" type="RichTextLabel" parent="CenterContainer/VBoxContainer/CategorySelection"]
 layout_mode = 2
-theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "Category Selection"
 fit_content = true
 autowrap_mode = 0
@@ -193,12 +197,20 @@ layout_mode = 2
 
 [node name="Fullscreen" type="CheckBox" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_focus_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "Fullscreen"
 
 [node name="MasterVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "Master Volume"
 fit_content = true
 
@@ -207,7 +219,9 @@ layout_mode = 2
 
 [node name="SFXVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "SFX Volume"
 fit_content = true
 
@@ -216,14 +230,16 @@ layout_mode = 2
 
 [node name="MusicVolumeLabel" type="RichTextLabel" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/default_color = Color(0, 0, 0, 1)
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.067, 0.071, 0.086, 1)
+theme_override_constants/outline_size = 6
 text = "Music Volume"
 fit_content = true
 
 [node name="MusicVolume" type="HSlider" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 
-[node name="Back" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="Back" type="Button" parent="CenterContainer/VBoxContainer" groups=["back_button"]]
 layout_mode = 2
 text = "Return to Main Menu"
 

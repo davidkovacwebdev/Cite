@@ -57,6 +57,10 @@ const MP_HEAL_BASE := 300
 const MP_EFFECT_PITCH_VARIATION := 0.05
 # heal.mp3 is ~5 dB hotter than the other multiplayer card sounds.
 const MP_HEAL_SOUND_VOLUME_DB := -5.0
+# How far a hovered hand card rises. Multiplayer cards are text-only, so the
+# description fits in the visible part and they don't need to pop up as far.
+const HOVER_LIFT := 80.0
+const MP_HOVER_LIFT := 30.0
 
 # Scales with the round it's played in: base * round / 2 (round 2 = 300,
 # round 6 = 900, ...).
@@ -82,9 +86,15 @@ func _ready() -> void:
 		$CardTitle.offset_left = 12
 		$CardTitle.offset_right = 156
 		$CardTitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# Text-only in multiplayer: just title + description, which gets the
+		# full card width and the space the effect text/icon used to take.
 		$Description.add_theme_color_override("default_color", Color.WHITE)
-		$Description2.add_theme_color_override("default_color", Color.WHITE)
-		$EffectText.add_theme_color_override("default_color", Color.WHITE)
+		$Description.offset_left = 12
+		$Description.offset_right = 156
+		$Description.offset_bottom = 240
+		$Description2.visible = false
+		$EffectText.visible = false
+		$EffectIcon.visible = false
 		# Cards live as real child nodes of Deck while undrawn, stacked at
 		# its position - stay hidden there and only appear once draw_card()
 		# moves them into Hand, so the deck's own back-stack art is what
@@ -258,9 +268,10 @@ func play_card():
 						reveal_mashup()
 				12:
 					# Double Down - arms bonus/penalty for the player's very
-					# next guess attempt (handled in multiplayer_board.gd).
+					# next guess attempt, and doubles the opponent's damage if
+					# they guess first (handled in multiplayer_board.gd).
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/double-down.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
-					Global.run.double_down_armed = true
+					Global.set_double_down_armed(true)
 				13:
 					# Letter Snipe - free instant version of reveal_letter().
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-snipe.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
@@ -446,7 +457,8 @@ func _on_mouse_entered() -> void:
 
 	if get_parent() is HBoxContainer:
 		var tween = create_tween()
-		tween.tween_property(self, "position:y", -80, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		var lift = MP_HOVER_LIFT if Global.is_multiplayer_match else HOVER_LIFT
+		tween.tween_property(self, "position:y", -lift, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 		# start sway
 		if sway_tween:

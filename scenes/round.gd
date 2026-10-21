@@ -51,6 +51,8 @@ func _ready() -> void:
 		$Control.position = Vector2(8, 8)  # health bar hugs the top-left edge, avatar + name below it
 		%SelfAvatar.visible = true
 		%SelfNameLabel.visible = true
+		%SelfPlayerBox.visible = true
+		add_child(SettingsOverlay.new())
 		_setup_self_identity()
 		if Global.is_dummy_opponent:
 			add_child(DummyOpponent.new())
