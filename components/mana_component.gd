@@ -33,8 +33,8 @@ func _ready() -> void:
 
 
 func _apply_skin() -> void:
-	$MinimalSkin.visible = Global.is_multiplayer_match
-	$ClassicSkin.visible = not Global.is_multiplayer_match
+	$MinimalSkin.visible = Global.uses_modern_ui()
+	$ClassicSkin.visible = not Global.uses_modern_ui()
 
 
 func set_display_vitals(mana: int, mana_max: int) -> void:

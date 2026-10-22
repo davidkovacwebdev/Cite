@@ -16,6 +16,11 @@ func _on_area_input_event(viewport, event, shape_idx):
 		skip_round()
 
 func skip_round(is_free: bool = false):
+	skip_current_round(is_free)
+
+
+# Also used by the single player board's skip buttons.
+static func skip_current_round(is_free: bool = false):
 	
 		if Global.run.round_number == 1:
 			Global.run.first_skipped = true

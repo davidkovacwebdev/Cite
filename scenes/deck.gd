@@ -18,8 +18,8 @@ func _ready() -> void:
 	%SpriteDead.visible = false
 	start_swap_timer()
 	%Confirmation.visible = false
-	if Global.is_multiplayer_match:
-		$Sprite2D.visible = false
+	if Global.uses_modern_ui():
+		$Sprite2D.visible = false  # the board draws its own plain card instead
 
 	# Setup confirmation timer
 	confirmation_timer = Timer.new()
@@ -309,8 +309,8 @@ func draw_random_card_excluding(excluded_order: int):
 	
 	
 func _input(event):
-	if Global.is_multiplayer_match:
-		return  # mascot (and its click-to-forfeit hotspot) is hidden in multiplayer for now
+	if Global.uses_modern_ui():
+		return  # mascot and its click-to-forfeit hotspot are Legacy only - Esc > Quit run instead
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var mouse_pos = get_global_mouse_position()
 		var icon_pos = %Icon1.global_position

@@ -61,6 +61,8 @@ const MP_HEAL_SOUND_VOLUME_DB := -5.0
 # description fits in the visible part and they don't need to pop up as far.
 const HOVER_LIFT := 80.0
 const MP_HOVER_LIFT := 30.0
+# Legacy card's second line (its bonus) on the dark single player card.
+const MODERN_SECONDARY_TEXT_COLOR := Color(0.78, 0.7, 1.0)
 
 # Scales with the round it's played in: base * round / 2 (round 2 = 300,
 # round 6 = 900, ...).
@@ -75,31 +77,34 @@ var sway_tween: Tween
 func _ready() -> void:
 	randomize()
 	pivot_offset = size / 2
-	$MinimalBackground.visible = Global.is_multiplayer_match
-	$Sprite2D.visible = not Global.is_multiplayer_match
-	if Global.is_multiplayer_match:
+	$MinimalBackground.visible = Global.uses_modern_ui()
+	$Sprite2D.visible = not Global.uses_modern_ui()
+	if Global.uses_modern_ui():
 		$CardTitle.add_theme_color_override("default_color", Color.WHITE)
 		$CardTitle.add_theme_font_size_override("normal_font_size", 18)
 		$CardTitle.add_theme_constant_override("line_separation", -4)
-		# No type icon in multiplayer - title spans the card and is centered.
+		# No type icon - title spans the card and is centered.
 		$CardSymbol.visible = false
 		$CardTitle.offset_left = 12
 		$CardTitle.offset_right = 156
 		$CardTitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		$Description.add_theme_color_override("default_color", Color.WHITE)
+		$Description2.add_theme_color_override("default_color", MODERN_SECONDARY_TEXT_COLOR)
+		$EffectText.add_theme_color_override("default_color", Color.WHITE)
+		# Cards live as real child nodes of Deck while undrawn, stacked at
+		# its position - stay hidden there and only appear once draw_card()
+		# moves them into Hand, so the pile of face-up cards never shows
+		# through the deck.
+		visible = false
+	if Global.is_multiplayer_match:
 		# Text-only in multiplayer: just title + description, which gets the
 		# full card width and the space the effect text/icon used to take.
-		$Description.add_theme_color_override("default_color", Color.WHITE)
 		$Description.offset_left = 12
 		$Description.offset_right = 156
 		$Description.offset_bottom = 240
 		$Description2.visible = false
 		$EffectText.visible = false
 		$EffectIcon.visible = false
-		# Cards live as real child nodes of Deck while undrawn, stacked at
-		# its position - stay hidden there and only appear once draw_card()
-		# moves them into Hand, so the deck's own back-stack art is what
-		# shows instead of the actual pile of face-up cards underneath it.
-		visible = false
 
 
 func _process(delta: float) -> void:

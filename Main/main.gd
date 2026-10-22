@@ -10,6 +10,9 @@ signal quit_pressed
 @onready var music_volume: HSlider = $CenterContainer/VBoxContainer/MusicVolume
 
 var settings: SaveData
+# Which Single Player submenu Normal/Hardcore were picked from - Legacy runs
+# keep the original look (Global.legacy_mode).
+var single_player_legacy := false
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -60,6 +63,12 @@ func _ready() -> void:
 	$CenterContainer/VBoxContainer/Exit.pressed.connect(_on_exit_pressed)
 	$CenterContainer/VBoxContainer/NormalMode.pressed.connect(_on_normal_mode_pressed)
 	$CenterContainer/VBoxContainer/Multiplayer.pressed.connect(_on_multiplayer_pressed)
+	$CenterContainer/VBoxContainer/SinglePlayer.pressed.connect(_on_single_player_pressed.bind(false))
+	$CenterContainer/VBoxContainer/Legacy.pressed.connect(_on_single_player_pressed.bind(true))
+	$CenterContainer/VBoxContainer/ModeBack.pressed.connect(_on_mode_back_pressed)
+	_connect_tip($CenterContainer/VBoxContainer/Multiplayer, "Play against another person online, matched via Steam")
+	_connect_tip($CenterContainer/VBoxContainer/SinglePlayer, "Guess article after article on your own, with your deck of cards")
+	_connect_tip($CenterContainer/VBoxContainer/Legacy, "Single player with its original look and layout")
 	$CenterContainer/VBoxContainer/FindMatch.pressed.connect(_on_find_match_pressed)
 	$CenterContainer/VBoxContainer/SubmitPlaylist.pressed.connect(_on_submit_playlist_pressed)
 	$CenterContainer/VBoxContainer/LobbyDummy.pressed.connect(_on_lobby_dummy_pressed)
@@ -86,80 +95,45 @@ func _ready() -> void:
 		show_multiplayer_menu()
 	
 
-# Show main menu (Play, Ranking, Settings, Exit)
+# Shows just the named menu items (children of the VBoxContainer).
+func _show_menu_items(names: Array) -> void:
+	for child in $CenterContainer/VBoxContainer.get_children():
+		child.visible = child.name in names
+	# A button hidden under the cursor never sends mouse_exited.
+	%Tips.text = ""
+	%Tips.visible = false
+	$MainMenuQuotes.text = get_random_menu_quote()
+
+
+# Show main menu (Play, Credits, Tutorial, Settings, Exit)
 func show_main_menu():
-	$CenterContainer/VBoxContainer/Play.visible = true
-	$CenterContainer/VBoxContainer/Credits.visible = true
-	$CenterContainer/VBoxContainer/Tutorial.visible = true
-	$CenterContainer/VBoxContainer/Settings.visible = true
-	$CenterContainer/VBoxContainer/TestArticle.visible = false
-	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = false
-	$CenterContainer/VBoxContainer/Exit.visible = true
+	_show_menu_items(["Play", "Credits", "Tutorial", "Settings", "Exit"])
 
-	# Hide mode selection buttons
-	$CenterContainer/VBoxContainer/NormalMode.visible = false
-	$CenterContainer/VBoxContainer/Start.visible = false
-	$CenterContainer/VBoxContainer/Multiplayer.visible = false
-	$CenterContainer/VBoxContainer/HardcoreMode.visible = false
-	$CenterContainer/VBoxContainer/Back.visible = false
-	$CenterContainer/VBoxContainer/CategorySelection.visible = false
-	$CenterContainer/VBoxContainer/SearchFilter.visible = false
 
-	# Hide multiplayer submenu buttons
-	$CenterContainer/VBoxContainer/FindMatch.visible = false
-	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = false
-	$CenterContainer/VBoxContainer/LobbyDummy.visible = false
-	$CenterContainer/VBoxContainer/MultiplayerBack.visible = false
-
-	$CenterContainer/VBoxContainer/Fullscreen.visible = false
-	$CenterContainer/VBoxContainer/MasterVolumeLabel.visible = false
-	$CenterContainer/VBoxContainer/MasterVolume.visible = false
-	$CenterContainer/VBoxContainer/SFXVolumeLabel.visible = false
-	$CenterContainer/VBoxContainer/SFXVolume.visible = false
-	$CenterContainer/VBoxContainer/MusicVolumeLabel.visible = false
-	$CenterContainer/VBoxContainer/MusicVolume.visible = false
-	
-	$MainMenuQuotes.text = get_random_menu_quote()
-	
-
-# Show game mode selection (Normal, Multiplayer, Hardcore, Back)
+# Show game mode selection (Multiplayer, Single Player, Legacy, Back)
 func show_mode_selection():
-	# Hide main menu buttons
-	$CenterContainer/VBoxContainer/Play.visible = false
-	$CenterContainer/VBoxContainer/Credits.visible = false
-	$CenterContainer/VBoxContainer/Tutorial.visible = false
-	$CenterContainer/VBoxContainer/Settings.visible = false
-	$CenterContainer/VBoxContainer/TestArticle.visible = false
-	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = false
-	$CenterContainer/VBoxContainer/Exit.visible = false
+	_show_menu_items(["Multiplayer", "SinglePlayer", "Legacy", "Back"])
 
-	# Show mode selection buttons
-	$CenterContainer/VBoxContainer/NormalMode.visible = true
-	$CenterContainer/VBoxContainer/Multiplayer.visible = true
-	$CenterContainer/VBoxContainer/HardcoreMode.visible = true
-	$CenterContainer/VBoxContainer/Back.visible = true
-
-	# Hide multiplayer submenu buttons (in case we got here from there)
-	$CenterContainer/VBoxContainer/FindMatch.visible = false
-	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = false
-	$CenterContainer/VBoxContainer/LobbyDummy.visible = false
-	$CenterContainer/VBoxContainer/MultiplayerBack.visible = false
-
-	$MainMenuQuotes.text = get_random_menu_quote()
 
 # Show multiplayer submenu (Find / Host a Game, Submit Playlist, Lobby Dummy, Back)
 func show_multiplayer_menu():
-	$CenterContainer/VBoxContainer/NormalMode.visible = false
-	$CenterContainer/VBoxContainer/Multiplayer.visible = false
-	$CenterContainer/VBoxContainer/HardcoreMode.visible = false
-	$CenterContainer/VBoxContainer/Back.visible = false
+	_show_menu_items(["FindMatch", "SubmitPlaylist", "LobbyDummy", "MultiplayerBack"])
 
-	$CenterContainer/VBoxContainer/FindMatch.visible = true
-	$CenterContainer/VBoxContainer/SubmitPlaylist.visible = true
-	$CenterContainer/VBoxContainer/LobbyDummy.visible = true
-	$CenterContainer/VBoxContainer/MultiplayerBack.visible = true
 
-	$MainMenuQuotes.text = get_random_menu_quote()
+# Show the Single Player or Legacy submenu (Normal, Hardcore, Back)
+func show_single_player_menu(legacy: bool):
+	single_player_legacy = legacy
+	_show_menu_items(["NormalMode", "HardcoreMode", "ModeBack"])
+
+
+func _connect_tip(button: Control, text: String) -> void:
+	button.mouse_entered.connect(func():
+		%Tips.text = text
+		%Tips.visible = true)
+	button.mouse_exited.connect(func():
+		%Tips.text = ""
+		%Tips.visible = false)
+
 
 # Button handlers
 func _on_play_pressed():
@@ -168,44 +142,33 @@ func _on_play_pressed():
 	
 
 func _on_back_pressed():
-	# Back from Normal mode's category/playset picker goes up to the Play
-	# submenu; from the Play submenu and Settings, to the main menu.
+	# Back from Normal mode's category/playset picker goes up to the Single
+	# Player (or Legacy) submenu; from the Play submenu and Settings, to the
+	# main menu.
 	if $CenterContainer/VBoxContainer/CategorySelection.visible:
-		$CenterContainer/VBoxContainer/CategorySelection.visible = false
-		$CenterContainer/VBoxContainer/Start.visible = false
-		$CenterContainer/VBoxContainer/SearchFilter.visible = false
-		show_mode_selection()
+		show_single_player_menu(single_player_legacy)
 	else:
 		show_main_menu()
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
-	%Tips.text = ""
-	%Tips.visible = false
+
+
+func _on_single_player_pressed(legacy: bool):
+	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
+	show_single_player_menu(legacy)
+
+
+func _on_mode_back_pressed():
+	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
+	show_mode_selection()
 
 func _on_normal_mode_pressed():
 	Global.run.current_game_mode = Global.run.GameMode.NORMAL
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
-	$CenterContainer/VBoxContainer/Play.visible = false
-	$CenterContainer/VBoxContainer/Credits.visible = false
-	$CenterContainer/VBoxContainer/Tutorial.visible = false
-	$CenterContainer/VBoxContainer/Settings.visible = false
-	$CenterContainer/VBoxContainer/TestArticle.visible = false
-	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = false
-	$CenterContainer/VBoxContainer/Exit.visible = false
 	populate_category_scrollcontainer(Global.all_categories)
 	populate_playset_scrollcontainer(Global.all_playsets)
-	$CenterContainer/VBoxContainer/NormalMode.visible = false
-	$CenterContainer/VBoxContainer/Multiplayer.visible = false
-	$CenterContainer/VBoxContainer/HardcoreMode.visible = false
-	$CenterContainer/VBoxContainer/Back.visible = true
-	$CenterContainer/VBoxContainer/CategorySelection.visible = true
-	$CenterContainer/VBoxContainer/Start.visible = true
-	$CenterContainer/VBoxContainer/SearchFilter.visible = true
-	
-	$MainMenuQuotes.text = get_random_menu_quote()
-	
-	
-	#Global.start_new_run()  # Reset the run
-	#get_tree().change_scene_to_file("res://scenes/Round.tscn")
+	_show_menu_items(["CategorySelection", "Start", "SearchFilter", "Back"])
+
+
 func _on_multiplayer_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
 	show_multiplayer_menu()
@@ -235,6 +198,7 @@ func _on_hardcore_mode_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
 	# TODO: Implement hardcore mode
 	Global.start_new_run()  # Reset the run
+	Global.legacy_mode = single_player_legacy
 	Global.run.current_game_mode = Global.run.GameMode.HARDCORE
 	get_tree().change_scene_to_file("res://scenes/Round.tscn")
 
@@ -293,6 +257,7 @@ func _on_start_pressed():
 	SoundManagerScript.play_music_direct("res://assets/sounds/music/music.mp3")
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/hit","SFX")
 	Global.start_new_run()  # Reset the run
+	Global.legacy_mode = single_player_legacy
 	get_tree().change_scene_to_file("res://scenes/Round.tscn")
 
 

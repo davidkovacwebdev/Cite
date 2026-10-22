@@ -13,6 +13,7 @@ var current_deck
 var DeckScene = preload("res://scenes/Deck.tscn")
 var BoardScene = preload("res://scenes/Board.tscn")
 var MultiplayerBoardScene = preload("res://scenes/MultiplayerBoard.tscn")
+var SingleplayerBoardScene = preload("res://scenes/SingleplayerBoard.tscn")
 
 # Multiplayer's first-round hand - both players get the same cards (see
 # Deck.generate_multiplayer_hand).
@@ -321,7 +322,11 @@ func create_deck():
 	get_parent().add_child(current_deck)
 
 func create_board():
-	var scene = MultiplayerBoardScene if Global.is_multiplayer_match else BoardScene
+	var scene = BoardScene  # Legacy single player
+	if Global.is_multiplayer_match:
+		scene = MultiplayerBoardScene
+	elif Global.uses_modern_ui():
+		scene = SingleplayerBoardScene
 	var current_board = scene.instantiate()
 	Global.run.current_round.current_board = current_board
 	get_parent().add_child(current_board)

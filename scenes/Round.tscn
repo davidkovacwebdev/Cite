@@ -66,6 +66,7 @@ offset_right = 1157.0
 offset_bottom = 695.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 color = Color(0.047, 0.051, 0.067, 1)
 
 [node name="Camera2D" type="Camera2D" parent="."]

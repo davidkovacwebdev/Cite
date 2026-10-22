@@ -12,6 +12,9 @@ var all_categories = []
 var achievement_data = []
 
 var is_multiplayer_match: bool = false
+# Single player started from the Legacy menu: the original look (gradient
+# background, classic bars and cards). Set by Main after start_new_run().
+var legacy_mode: bool = false
 var is_dummy_opponent: bool = false
 # DummyOpponent is a plain Node recreated fresh every round (the whole scene
 # reloads each round), so its accumulated damage has to live here instead of
@@ -336,6 +339,12 @@ func strip_accents(text: String) -> String:
 
 # Used to accept/reject a player's title guess: a flat 85% similarity ratio
 # for any length, so small typos are forgiven.
+# The match-style look (dark background, minimal bars, dark cards) - used by
+# multiplayer and by single player outside Legacy.
+func uses_modern_ui() -> bool:
+	return is_multiplayer_match or not legacy_mode
+
+
 func is_guess_match(guess: String, solution: String) -> bool:
 	var distance = levenshtein_distance(guess, solution)
 	var max_len = max(guess.length(), solution.length())

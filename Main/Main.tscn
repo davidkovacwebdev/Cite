@@ -109,6 +109,18 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 26
 text = "Exit"
 
+[node name="Multiplayer" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Multiplayer"
+
+[node name="SinglePlayer" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Single Player"
+
+[node name="Legacy" type="Button" parent="CenterContainer/VBoxContainer"]
+layout_mode = 2
+text = "Legacy"
+
 [node name="NormalMode" type="Button" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 text = "Normal"
@@ -117,9 +129,10 @@ text = "Normal"
 layout_mode = 2
 text = "Hardcore"
 
-[node name="Multiplayer" type="Button" parent="CenterContainer/VBoxContainer"]
+[node name="ModeBack" type="Button" parent="CenterContainer/VBoxContainer" groups=["back_button"]]
+visible = false
 layout_mode = 2
-text = "Multiplayer"
+text = "Back"
 
 [node name="FindMatch" type="Button" parent="CenterContainer/VBoxContainer"]
 visible = false

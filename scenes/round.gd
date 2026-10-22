@@ -7,6 +7,8 @@ const SCRAMBLED_STATUS_COLOR := Color(1.0, 0.78, 0.36)
 # Multiplayer round-end damage number (MultiplayerBoard): dealt vs taken.
 const DAMAGE_DEALT_COLOR := Color(0.45, 0.9, 0.5)
 const DAMAGE_TAKEN_COLOR := Color(0.95, 0.3, 0.3)
+# Mana bar height under the health bar in the single player match layout.
+const MANA_BAR_HEIGHT := 32.0
 
 var current_id
 var article_chunks
@@ -35,11 +37,12 @@ var SkipScene = preload("res://scenes/Skip.tscn")
 func _ready() -> void:
 	article_title = Global.run.current_round.article_title
 
-	$Gradient.visible = not Global.is_multiplayer_match
-	$BackgroundScroll.visible = not Global.is_multiplayer_match
-	$Background.visible = Global.is_multiplayer_match
-	$CategoryReveal.visible = not Global.is_multiplayer_match
-	$DifficultyReveal.visible = not Global.is_multiplayer_match
+	$Gradient.visible = not Global.uses_modern_ui()
+	$BackgroundScroll.visible = not Global.uses_modern_ui()
+	$Background.visible = Global.uses_modern_ui()
+	# Outside Legacy, SingleplayerBoard has its own buttons for these.
+	$CategoryReveal.visible = not Global.uses_modern_ui()
+	$DifficultyReveal.visible = not Global.uses_modern_ui()
 
 	Global.run.Health.heal(Global.run.legacy_heal * 10)
 	Global.run.Mana.restore_mana(Global.run.legacy_mana_restore * 1)
@@ -56,6 +59,20 @@ func _ready() -> void:
 		_setup_self_identity()
 		if Global.is_dummy_opponent:
 			add_child(DummyOpponent.new())
+	elif Global.uses_modern_ui():
+		# Single player in the match layout: same player box, with the mana
+		# bar under the health bar pushing avatar + name down.
+		$Control.position = Vector2(8, 8)
+		%SelfAvatar.visible = true
+		%SelfNameLabel.visible = true
+		%SelfPlayerBox.visible = true
+		%SelfAvatar.position.y += MANA_BAR_HEIGHT
+		%SelfNameLabel.position.y += MANA_BAR_HEIGHT
+		%SelfPlayerBox.size.y += MANA_BAR_HEIGHT
+		$CategoryReveal/Area2D.input_pickable = false
+		$DifficultyReveal/Area2D.input_pickable = false
+		add_child(SettingsOverlay.new())
+		_setup_self_identity()
 
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -214,8 +231,8 @@ func show_status(text: String, color: Color = Color.WHITE) -> void:
 
 
 func create_skip_icons():
-	if Global.is_multiplayer_match:
-		return
+	if Global.uses_modern_ui():
+		return  # SingleplayerBoard shows skip buttons instead; multiplayer has none
 
 	var start_position = Vector2(750, 35)  # Start at x=700
 	var spacing = 50  # Horizontal spacing between icons

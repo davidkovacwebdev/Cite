@@ -3,9 +3,9 @@ extends CanvasLayer
 class_name SettingsOverlay
 
 # In-match settings: the main menu's volume settings plus a few game options
-# and Leave match, shown as a transparent overlay over the multiplayer match.
-# Toggled with Esc or the small button in the bottom-left corner. The match
-# keeps running underneath - there's no pausing in multiplayer.
+# and Leave match (Quit run in single player), shown as a transparent overlay
+# over the match. Toggled with Esc or the small button in the bottom-left
+# corner. The game keeps running underneath - there's no pausing.
 
 const SETTINGS_PATH := "user://scene_data.tres"
 const PANEL_WIDTH := 380
@@ -122,13 +122,16 @@ func _build_panel() -> void:
 	column.add_child(HSeparator.new())
 	# Leaving forfeits, so it takes a second click to confirm.
 	leave_button = Button.new()
-	leave_button.text = "Leave match"
+	leave_button.text = _leave_text()
 	leave_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	leave_button.custom_minimum_size = Vector2(140, 0)
 	leave_button.pressed.connect(_on_leave_pressed)
 	column.add_child(leave_button)
 	leave_warning = Label.new()
-	leave_warning.text = "%s will win the match. Click again to leave." % Global.multiplayer_opponent_name
+	if Global.is_multiplayer_match:
+		leave_warning.text = "%s will win the match. Click again to leave." % Global.multiplayer_opponent_name
+	else:
+		leave_warning.text = "Your run will end here. Click again to quit."
 	leave_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	leave_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	leave_warning.add_theme_font_size_override("font_size", 14)
@@ -207,14 +210,19 @@ func _on_leave_pressed() -> void:
 		leave_warning.visible = true
 		leave_button.text = "Leave anyway"
 		return
-	# Same as losing on HP: the opponent is told they won.
+	# Same as losing on HP: the opponent is told they won (no-op in single
+	# player, where it's the end of the run).
 	Global.end_multiplayer_match("lost")
 	get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
 
 
 func _reset_leave_confirm() -> void:
 	leave_warning.visible = false
-	leave_button.text = "Leave match"
+	leave_button.text = _leave_text()
+
+
+func _leave_text() -> String:
+	return "Leave match" if Global.is_multiplayer_match else "Quit run"
 
 
 func _on_master_volume_changed(value: float) -> void:
