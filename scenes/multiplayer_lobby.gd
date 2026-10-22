@@ -22,6 +22,9 @@ const LOBBY_VERSION := "1"
 const CONNECTION_TIMEOUT_SECONDS := 15.0
 const PASSWORD_CHECK_TIMEOUT_SECONDS := 10.0
 const BROWSER_REFRESH_SECONDS := 5.0
+# How many open games the browser asks Steam for. Steam may return fewer.
+const MAX_LISTED_LOBBIES := 1000
+const LOBBIES_PER_PAGE := 20
 const MAX_CHAT_LENGTH := 200
 const MIN_GAME_NAME_LENGTH := 3
 const NO_IMAGE_TEXT := "No image (optional, PNG/JPG under 1 MB)"
@@ -91,6 +94,7 @@ var browser_refresh_timer: Timer
 # Last lobby list from Steam - kept so the search box and playlist filter can
 # re-filter it without waiting for the next refresh.
 var browser_lobby_ids: Array = []
+var browser_page := 0
 
 var dummy_lobby: bool = false
 var dummy_chat_timer: Timer
@@ -142,8 +146,10 @@ func _ready() -> void:
 	%RoomBackButton.pressed.connect(_on_room_back_pressed)
 	%PlayButton.pressed.connect(_on_play_pressed)
 	%RefreshButton.pressed.connect(_on_refresh_pressed)
-	%BrowserSearch.text_changed.connect(func(_text): _rebuild_lobby_rows())
-	%BrowserPlaylistFilter.item_selected.connect(func(_index): _rebuild_lobby_rows())
+	%BrowserSearch.text_changed.connect(func(_text): _go_to_browser_page(0))
+	%BrowserPlaylistFilter.item_selected.connect(func(_index): _go_to_browser_page(0))
+	%PrevPageButton.pressed.connect(func(): _go_to_browser_page(browser_page - 1))
+	%NextPageButton.pressed.connect(func(): _go_to_browser_page(browser_page + 1))
 	%HostBackButton.pressed.connect(_on_back_pressed)
 	_build_lobby_header()
 	%BrowserHostButton.pressed.connect(_on_host_pressed)
@@ -220,10 +226,13 @@ func _show_choice_state() -> void:
 
 func _show_host_form() -> void:
 	_show_center_panel(%HostForm)
-	_update_create_button()
 	%PasswordInput.clear()
 	_on_visibility_selected(%VisibilityPicker.selected)
+	if %GameNameInput.text.strip_edges().is_empty():
+		%GameNameInput.text = "%s's game" % Global.get_own_name()
+	_update_create_button()
 	%GameNameInput.grab_focus()
+	%GameNameInput.select_all()  # typing replaces the suggested name
 	if dummy_lobby:
 		# Always private, so visibility/password don't apply.
 		%VisibilityPicker.visible = false
@@ -699,7 +708,7 @@ func _request_lobby_list() -> void:
 	Steam.addRequestLobbyListStringFilter(VERSION_LOBBY_KEY, LOBBY_VERSION, Steam.LOBBY_COMPARISON_EQUAL)
 	Steam.addRequestLobbyListStringFilter(GAME_STARTED_LOBBY_KEY, "0", Steam.LOBBY_COMPARISON_EQUAL)
 	Steam.addRequestLobbyListFilterSlotsAvailable(1)
-	Steam.addRequestLobbyListResultCountFilter(100)
+	Steam.addRequestLobbyListResultCountFilter(MAX_LISTED_LOBBIES)
 	Steam.requestLobbyList()
 
 
@@ -717,20 +726,37 @@ func _rebuild_lobby_rows() -> void:
 	var playlist_filter = ""
 	if %BrowserPlaylistFilter.selected > 0:
 		playlist_filter = str(%BrowserPlaylistFilter.get_item_metadata(%BrowserPlaylistFilter.selected))
-	var shown = 0
+	var matches = []
 	for found_id in browser_lobby_ids:
 		var info = _lobby_row_info(found_id)
 		if not playlist_filter.is_empty() and info.playlist_id != playlist_filter:
 			continue
 		if not query.is_empty() and not (query in info.title.to_lower() or query in info.host.to_lower() or query in info.playlist.to_lower()):
 			continue
-		%LobbyRows.add_child(_build_lobby_row(found_id, info, shown))
-		shown += 1
-	%BrowserEmptyLabel.visible = shown == 0
+		matches.append([found_id, info])
+
+	# The auto-refresh keeps the current page unless it no longer exists.
+	var page_count = maxi(ceili(matches.size() / float(LOBBIES_PER_PAGE)), 1)
+	browser_page = clampi(browser_page, 0, page_count - 1)
+	var first = browser_page * LOBBIES_PER_PAGE
+	for i in range(first, mini(first + LOBBIES_PER_PAGE, matches.size())):
+		%LobbyRows.add_child(_build_lobby_row(matches[i][0], matches[i][1], i))
+	%LobbyPager.visible = page_count > 1
+	%PageLabel.text = "Page %d / %d" % [browser_page + 1, page_count]
+	%PrevPageButton.disabled = browser_page == 0
+	%NextPageButton.disabled = browser_page == page_count - 1
+
+	%BrowserEmptyLabel.visible = matches.is_empty()
 	if browser_lobby_ids.is_empty():
 		%BrowserEmptyLabel.text = "No games are being hosted right now. Host one below!"
 	else:
 		%BrowserEmptyLabel.text = "No games match your search."
+
+
+func _go_to_browser_page(page: int) -> void:
+	browser_page = page
+	_rebuild_lobby_rows()
+	%LobbyScroll.scroll_vertical = 0
 
 
 func _lobby_row_info(found_id: int) -> Dictionary:

@@ -404,6 +404,7 @@ theme_override_constants/separation = 12
 layout_mode = 2
 
 [node name="LobbyScroll" type="ScrollContainer" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
@@ -424,6 +425,34 @@ theme_override_font_sizes/font_size = 20
 text = "No games are being hosted right now. Host one below!"
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="LobbyPager" type="HBoxContainer" parent="BrowserContainer/LobbyTablePanel/LobbyTable"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="PrevPageButton" type="Button" parent="BrowserContainer/LobbyTablePanel/LobbyTable/LobbyPager"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = "<"
+
+[node name="PageLabel" type="Label" parent="BrowserContainer/LobbyTablePanel/LobbyTable/LobbyPager"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.72, 0.78, 1)
+theme_override_font_sizes/font_size = 16
+text = "Page 1 / 1"
+horizontal_alignment = 1
+
+[node name="NextPageButton" type="Button" parent="BrowserContainer/LobbyTablePanel/LobbyTable/LobbyPager"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+text = ">"
 
 [node name="BrowserActions" type="HBoxContainer" parent="BrowserContainer"]
 layout_mode = 2

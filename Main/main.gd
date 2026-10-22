@@ -29,11 +29,6 @@ func _ready() -> void:
 	Global.load_and_extract_card_data()
 	%Tips.visible = false
 
-	if Global.return_to_multiplayer_menu:
-		Global.return_to_multiplayer_menu = false
-		show_mode_selection()
-		show_multiplayer_menu()
-
 
 
 	master_volume.set_value_no_signal(SoundManagerScript.master_volume * 100)
@@ -84,6 +79,11 @@ func _ready() -> void:
 
 	# Set initial state - show main menu buttons, hide mode selection
 	show_main_menu()
+	# Coming back from the lobby lands in the Multiplayer submenu instead.
+	if Global.return_to_multiplayer_menu:
+		Global.return_to_multiplayer_menu = false
+		show_mode_selection()
+		show_multiplayer_menu()
 	
 
 # Show main menu (Play, Ranking, Settings, Exit)
@@ -168,7 +168,15 @@ func _on_play_pressed():
 	
 
 func _on_back_pressed():
-	show_main_menu()
+	# Back from Normal mode's category/playset picker goes up to the Play
+	# submenu; from the Play submenu and Settings, to the main menu.
+	if $CenterContainer/VBoxContainer/CategorySelection.visible:
+		$CenterContainer/VBoxContainer/CategorySelection.visible = false
+		$CenterContainer/VBoxContainer/Start.visible = false
+		$CenterContainer/VBoxContainer/SearchFilter.visible = false
+		show_mode_selection()
+	else:
+		show_main_menu()
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
 	%Tips.text = ""
 	%Tips.visible = false
