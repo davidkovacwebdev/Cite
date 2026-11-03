@@ -17,6 +17,8 @@ var quote_author:String
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	get_random_menu_quote()
+	if Global.uses_modern_ui():
+		_apply_paper_style()
 
 	if Global.is_multiplayer_match:
 		if Global.multiplayer_match_outcome == "won":
@@ -46,6 +48,8 @@ func _ready() -> void:
 	%WrongGuesses.text = "You had " + str(number_of_wrong_guesses) + " wrong guesses"
 	$%BlinkTime.text = "You blinked " + str(blink_time) + " times, you should check that"
 	%LastArticle.text = "Your demise was sealed when you failed miserably at guessing the "+ Global.run.current_round.article_title +" article"
+	# Before the playlist selection is cleared - it picks the leaderboard.
+	Leaderboards.submit_run()
 	Global.selected_categories = []
 	Global.selected_playsets = []
 	Global.run.wikipedia_ids = []
@@ -53,6 +57,40 @@ func _ready() -> void:
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	pass
+
+
+# Single player (Normal/Hardcore) and multiplayer: the hub's paper look.
+# Legacy runs keep the original gradient screen.
+func _apply_paper_style() -> void:
+	var style := preload("res://ui/match/match_style.gd")
+	theme = style.HUB_THEME
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	$TextureRect.visible = false
+	var bg := ColorRect.new()
+	bg.color = style.color("bg")
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	move_child(bg, 0)
+
+	%Title.add_theme_font_override("normal_font", preload("res://ui/fonts/fraunces_600.tres"))
+	%Title.add_theme_font_size_override("normal_font_size", 44)
+	%Quote.add_theme_font_override("normal_font", preload("res://ui/fonts/plex_400.tres"))
+	%Quote.add_theme_font_size_override("normal_font_size", 18)
+	%Quote.add_theme_color_override("default_color", style.color("muted"))
+	for label in [%Points, %CardStats, %ComboNumber, %WrongGuesses, %BlinkTime, %LastArticle]:
+		label.add_theme_font_override("normal_font", preload("res://ui/fonts/plex_500.tres"))
+		label.add_theme_font_size_override("normal_font_size", 18)
+		label.add_theme_color_override("default_color", style.color("text"))
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	%Button.theme_type_variation = "CtaButton"
+	%Button.text = "Back to Play"
+	%Button.add_theme_font_size_override("font_size", 18)
+	%Button.offset_left = -110
+	%Button.offset_right = 110
+	%Button.offset_top = -84
+	%Button.offset_bottom = -36
 
 
 #func calculate_points() -> int:
@@ -77,7 +115,8 @@ func _process(delta: float) -> void:
 	
 	
 func _on_button_pressed():
-	get_tree().change_scene_to_file("res://Main/Main.tscn")
+	# Legacy runs go back to the old menu they were started from.
+	get_tree().change_scene_to_file("res://Main/Main.tscn" if Global.legacy_mode and not Global.is_multiplayer_match else Global.MENU_SCENE)
 	
 func get_random_menu_quote():
 	var file_path = "res://assets/data/end_quotes.json"

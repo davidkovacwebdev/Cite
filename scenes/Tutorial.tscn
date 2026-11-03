@@ -60,7 +60,7 @@ text = "Next"
 
 [node name="Return" type="Button" parent="PanelContainer/VBoxContainer/HBoxContainer" groups=["back_button"]]
 layout_mode = 2
-text = "Return to Menu"
+text = "Back"
 
 [connection signal="pressed" from="PanelContainer/VBoxContainer/HBoxContainer/PrevBtn" to="." method="_on_prev_btn_pressed"]
 [connection signal="pressed" from="PanelContainer/VBoxContainer/HBoxContainer/NextBtn" to="." method="_on_next_btn_pressed"]

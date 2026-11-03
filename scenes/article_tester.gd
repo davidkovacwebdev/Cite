@@ -63,4 +63,4 @@ func _on_result_activated(index: int) -> void:
 
 
 func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://Main/Main.tscn")
+	get_tree().change_scene_to_file(Global.MENU_SCENE)

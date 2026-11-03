@@ -10,6 +10,11 @@ var number_of_combos:int
 var number_of_wrong_guesses: int
 var number_of_total_cards:int
 var number_of_played_cards:int
+# Leaderboard scores (see Leaderboards.gd): articles guessed right this run,
+# and Hardcore's points - the same guesses weighted by how obscure each
+# article was.
+var correct_guesses: int = 0
+var hardcore_points: int = 0
 
 var playset: String
 

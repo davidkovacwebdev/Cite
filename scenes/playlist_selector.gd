@@ -14,14 +14,12 @@ const OFFICIAL_ICON := preload("res://assets/sprites/cite_exee_logo.png")
 const COMMUNITY_FALLBACK_ICON := preload("res://assets/sprites/cite-logoonly-small.png")
 const ICON_SIZE := Vector2(44, 44)
 const ROW_HEIGHT := 56
-const SELECTED_BORDER_COLOR := Color("#3b4fd8")
 
 var interactive: bool = true
 var selected_id: String = ""
 var rows: Dictionary = {}  # playlist_id -> Button
 var row_names: Dictionary = {}  # playlist_id -> display name
 var button_group := ButtonGroup.new()
-var selected_style: StyleBoxFlat
 
 var search: LineEdit
 var scroll: ScrollContainer
@@ -34,14 +32,6 @@ var no_match_label: Label
 
 func _ready() -> void:
 	add_theme_constant_override("separation", 8)
-
-	# The theme's pressed look is barely different from normal - outline the
-	# selected row instead so the current choice is obvious.
-	selected_style = StyleBoxFlat.new()
-	selected_style.bg_color = Color(0.16, 0.2, 0.42, 0.85)
-	selected_style.border_color = SELECTED_BORDER_COLOR
-	selected_style.set_border_width_all(3)
-	selected_style.set_corner_radius_all(4)
 
 	search = LineEdit.new()
 	search.placeholder_text = "Search playlists..."
@@ -143,8 +133,8 @@ func _make_row(playlist_id: String, icon_texture: Texture2D) -> Button:
 	row.focus_mode = Control.FOCUS_ALL if interactive else Control.FOCUS_NONE
 	row.tooltip_text = row_names[playlist_id]
 	row.pressed.connect(_on_row_pressed.bind(playlist_id))
-	for style_name in ["pressed", "hover_pressed"]:
-		row.add_theme_stylebox_override(style_name, selected_style)
+	# Hub theme: selected row = accent outline + tint.
+	row.theme_type_variation = "PlaylistRow"
 
 	var content = HBoxContainer.new()
 	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -184,24 +174,16 @@ func _community_icon(playlist_id: String) -> Texture2D:
 func _make_header(text: String) -> Label:
 	var label = Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", 20)
-	_add_outline(label)
+	label.theme_type_variation = "ColumnHeader"
 	return label
 
 
 func _make_note(text: String) -> Label:
 	var label = Label.new()
 	label.text = text
-	label.modulate = Color(1, 1, 1, 0.6)
+	label.theme_type_variation = "MutedLabel"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_add_outline(label)
 	return label
-
-
-# Headers and notes sit straight on the lobby's light background.
-func _add_outline(label: Label) -> void:
-	label.add_theme_color_override("font_outline_color", Color(0.067, 0.071, 0.086))
-	label.add_theme_constant_override("outline_size", 6)
 
 
 func _on_row_pressed(playlist_id: String) -> void:

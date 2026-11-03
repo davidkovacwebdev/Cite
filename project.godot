@@ -15,7 +15,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 [application]
 
 config/name="Cite"
-run/main_scene="uid://bgw5usgcqrmb1"
+run/main_scene="res://ui/hub/hub.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
@@ -29,6 +29,7 @@ Global="*res://globals/Global.gd"
 SoundManagerScript="*res://globals/SoundManager.tscn"
 MultiplayerSync="*res://globals/MultiplayerSync.gd"
 Workshop="*res://globals/Workshop.gd"
+Leaderboards="*res://globals/Leaderboards.gd"
 
 [display]
 
@@ -45,6 +46,7 @@ textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 
 [steam]
 

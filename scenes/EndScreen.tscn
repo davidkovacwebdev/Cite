@@ -125,12 +125,12 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -259.0
+offset_left = -30.0
 offset_top = -58.0
-offset_right = 259.0
+offset_right = 30.0
 offset_bottom = -33.0
 grow_horizontal = 2
 grow_vertical = 0
-text = "Return to menu"
+text = "Back"
 
 [connection signal="pressed" from="Button" to="." method="_on_button_pressed"]

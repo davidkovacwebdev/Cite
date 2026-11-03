@@ -1,0 +1,12 @@
+[gd_resource type="FontVariation" format=3 uid="uid://dbxe7jmce8bcm"]
+
+[ext_resource type="FontFile" uid="uid://c1gggm0gd2pf7" path="res://ui/fonts/Fraunces.ttf" id="1_ljmfx"]
+
+[resource]
+base_font = ExtResource("1_ljmfx")
+variation_opentype = {
+1397704276: 0,
+1464815179: 0,
+1869640570: 24,
+2003265652: 600
+}

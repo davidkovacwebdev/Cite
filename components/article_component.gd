@@ -58,22 +58,11 @@ func _ready() -> void:
 # playlist file to read, not used here.
 func load_multiplayer_article_data():
 	Global.run.first_run = false
-	var path = Global.get_playlist_path(Global.multiplayer_playlist_id)
-	var file = FileAccess.open(path, FileAccess.READ)
-	if not file:
-		print("Failed to open multiplayer playlist: ", path)
-		return
-
-	var json = JSON.new()
-	var parse_result = json.parse(file.get_as_text())
-	file.close()
-	if parse_result != OK:
-		print("Failed to parse multiplayer playlist: ", path)
-		return
-
 	Global.run.wikipedia_ids.clear()
-	for id in json.data.values():
-		Global.run.wikipedia_ids.append(int(id))
+	Global.run.wikipedia_ids.append_array(Global.get_playlist_article_ids(Global.multiplayer_playlist_id))
+	if Global.run.wikipedia_ids.is_empty():
+		print("Multiplayer playlist is empty or missing: ", Global.multiplayer_playlist_id)
+		return
 
 	# Both players load the same playlist into the same starting order, so
 	# seeding with a seed shared at match start makes this shuffle - and
@@ -158,6 +147,9 @@ func request_random_article():
 
 func request_article(page_id: int):
 	var url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&pageids=" + str(page_id) + "&explaintext=true&exintro=true&format=json&origin=*"
+	if Global.run.current_game_mode == 1:
+		# Hardcore scores each guess by how obscure the article is.
+		url = url.replace("prop=extracts", "prop=extracts%7Cpageviews") + "&pvipdays=30"
 	$HTTPRequest.request(url)
 	article_id = page_id
 
@@ -222,8 +214,23 @@ func parse_article_data(body) -> Dictionary:
 	return {
 		"title": strip_disambiguation(page_data["title"]),
 		"extract": page_data["extract"],
-		"id": page_id
+		"id": page_id,
+		"daily_views": average_daily_views(page_data.get("pageviews"))
 	}
+
+
+# prop=pageviews gives {"2026-10-01": 123, ...}, with null for days Wikipedia
+# has no count for yet - -1 when there's nothing to go on.
+func average_daily_views(pageviews) -> float:
+	if not pageviews is Dictionary:
+		return -1.0
+	var total := 0.0
+	var days := 0
+	for views in pageviews.values():
+		if views != null:
+			total += float(views)
+			days += 1
+	return total / days if days > 0 else -1.0
 
 # Wikipedia disambiguates same-named topics with a trailing "(...)" on the
 # actual page title, e.g. "Turkey (bird)" vs the country - not part of the
@@ -279,6 +286,7 @@ func setup_article_round(article_data: Dictionary):
 		Global.run.current_round.article_main_category = "Nope"
 		Global.run.current_round.article_related_categories = "not in hardcore mode"
 		Global.run.current_round.article_difficulty = ""
+		Global.run.current_round.article_daily_views = article_data.get("daily_views", -1.0)
 		Global.run.current_round.censor_title()
 
 func get_category_from_cache(target_id: int) -> String:

@@ -36,16 +36,12 @@ const MSG_PASSWORD := "pw"
 const MSG_KICK := "kick"
 const MSG_PLAYLIST_READY := "plready"  # guest -> host, payload = guest's playlist hash
 
-const HOST_CHAT_COLOR := "#8b9cff"
-const GUEST_CHAT_COLOR := "#fb923c"
 # Find / Host a Game table: column titles and their width ratios, shared by
 # the header and every row so they line up. The Join button column is fixed.
 const LOBBY_COLUMNS := [["Game", 3.0], ["Host", 2.0], ["Playlist", 2.5], ["Access", 1.2]]
 const LOBBY_JOIN_COLUMN_WIDTH := 100
-const LOBBY_ROW_COLORS := [Color(0.106, 0.114, 0.141, 1), Color(0.13, 0.138, 0.168, 1)]
-const LOBBY_HEADER_COLOR := Color(0.62, 0.64, 0.7)
-const LOBBY_LOCKED_COLOR := Color(1.0, 0.78, 0.36)
-const LOBBY_OPEN_COLOR := Color(0.49, 0.88, 0.63)
+# Alternating row styles (hub theme type variations).
+const LOBBY_ROW_STYLES := ["TableRow", "TableRowAlt"]
 
 # Dummy lobby (Global.multiplayer_lobby_entry == "dummy"): the regular host
 # flow, but entirely local - no Steam lobby is created, and the guest is a
@@ -111,7 +107,17 @@ var downloading_file_id: int = 0
 # Workshop.validate_playlist_file() and waiting for Upload.
 var submit_playlist: Dictionary = {}
 var submit_preview_path: String = ""  # optional preview image, "" = none
+# True when the submit form was reached from the Playlist Builder (Back
+# returns there) rather than "Submit a File".
+var submit_from_builder: bool = false
 var uploaded_file_id: int = 0
+
+# Top bar on the pre-room screens: Public rooms | Create room | Join with code,
+# plus Back to Play (the hub). Hidden in a room, the Workshop submit flow and
+# the dummy lobby.
+const NAV_TABS := [["Public rooms", "browse"], ["Create room", "host"], ["Join with code", "join"]]
+var nav_bar: Control
+var nav_buttons: Array = []
 
 
 func _ready() -> void:
@@ -157,7 +163,11 @@ func _ready() -> void:
 	%BrowserBackButton.pressed.connect(_go_to_main_menu)
 	%ChatSendButton.pressed.connect(_send_chat)
 	%ChatInput.text_submitted.connect(func(_text): _send_chat())
-	%SubmitPlaylistButton.pressed.connect(_show_submit_panel)
+	%SubmitPlaylistButton.pressed.connect(_show_submit_choice)
+	%SubmitFileButton.pressed.connect(_show_submit_panel)
+	%BuildPlaylistButton.pressed.connect(_show_playlist_builder)
+	%PlaylistBuilder.back_pressed.connect(_show_submit_choice)
+	%PlaylistBuilder.continue_pressed.connect(_on_builder_continue)
 	%ChooseFileButton.pressed.connect(func(): %PlaylistFileDialog.popup_centered_ratio(0.6))
 	%PlaylistFileDialog.file_selected.connect(_on_playlist_file_selected)
 	%ChooseImageButton.pressed.connect(func(): %PreviewImageDialog.popup_centered_ratio(0.6))
@@ -183,7 +193,97 @@ func _ready() -> void:
 	dummy_chat_timer.timeout.connect(func(): _add_player_chat(DUMMY_GUEST_ID, DummyOpponent.random_chat_line()))
 	add_child(dummy_chat_timer)
 
+	_build_nav()
 	_show_entry_screen()
+
+
+# --- Top bar ----------------------------------------------------------------
+
+func _build_nav() -> void:
+	nav_bar = HBoxContainer.new()
+	nav_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	nav_bar.offset_left = 20
+	nav_bar.offset_right = -20
+	nav_bar.offset_top = 12
+	nav_bar.custom_minimum_size.y = 52
+	nav_bar.add_theme_constant_override("separation", 16)
+	add_child(nav_bar)
+
+	var logo = TextureRect.new()
+	logo.texture = load("res://ui/hub/cite_logo_ink.png")
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.custom_minimum_size = Vector2(86, 34)
+	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	nav_bar.add_child(logo)
+
+	var seg = PanelContainer.new()
+	seg.theme_type_variation = "SegBar"
+	seg.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var seg_row = HBoxContainer.new()
+	seg_row.add_theme_constant_override("separation", 2)
+	seg.add_child(seg_row)
+	var group = ButtonGroup.new()
+	for tab in NAV_TABS:
+		var b = Button.new()
+		b.text = tab[0]
+		b.theme_type_variation = "SegButton"
+		b.toggle_mode = true
+		b.button_group = group
+		b.focus_mode = Control.FOCUS_NONE
+		var entry: String = tab[1]
+		b.pressed.connect(func(): _on_nav_tab(entry))
+		seg_row.add_child(b)
+		nav_buttons.append(b)
+	nav_bar.add_child(seg)
+
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nav_bar.add_child(spacer)
+
+	var back = Button.new()
+	back.text = "‹  Back to Play"
+	back.theme_type_variation = "GhostButton"
+	back.focus_mode = Control.FOCUS_NONE
+	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	back.pressed.connect(func():
+		if Workshop.is_uploading:
+			return
+		SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click", "UI")
+		_go_to_main_menu())
+	nav_bar.add_child(back)
+
+
+func _on_nav_tab(entry: String) -> void:
+	if lobby_id != 0:
+		return  # in a room - Leave first
+	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click", "UI")
+	# Same entry flags the hub uses, so each screen's own Back keeps working.
+	Global.multiplayer_lobby_entry = entry
+	match entry:
+		"browse":
+			_show_browser()
+		"host":
+			_show_host_form()
+		"join":
+			_show_code_panel()
+
+
+# Which tab the current screen belongs to (-1 = hide the bar).
+func _update_nav() -> void:
+	if not nav_bar:
+		return
+	var tab := -1
+	if not dummy_lobby and lobby_id == 0:
+		if %BrowserContainer.visible:
+			tab = 0
+		elif %CenterContainer.visible and %HostForm.visible:
+			tab = 1
+		elif %CenterContainer.visible and (%CodePanel.visible or %PasswordPanel.visible):
+			tab = 2
+	nav_bar.visible = tab != -1
+	for i in nav_buttons.size():
+		nav_buttons[i].set_pressed_no_signal(i == tab)
 
 
 # --- Screens ---------------------------------------------------------------
@@ -192,9 +292,17 @@ func _show_entry_screen(message: String = "") -> void:
 	if dummy_lobby:
 		_show_host_form()
 	elif Global.multiplayer_lobby_entry == "submit":
-		_show_submit_panel()
+		_show_submit_choice()
 	elif Global.multiplayer_lobby_entry == "browse":
 		_show_browser()
+	elif Global.multiplayer_lobby_entry == "host":
+		_show_host_form()
+	elif Global.multiplayer_lobby_entry == "join":
+		_show_code_panel()
+		if not Global.pending_lobby_code.is_empty():
+			%LobbyCodeInput.text = Global.pending_lobby_code
+			Global.pending_lobby_code = ""
+			_on_connect_pressed()
 	else:
 		_show_choice_state()
 	if not message.is_empty():
@@ -205,18 +313,21 @@ func _show_screen(screen: Control) -> void:
 	%CenterContainer.visible = screen == %CenterContainer
 	%BrowserContainer.visible = screen == %BrowserContainer
 	%RoomContainer.visible = screen == %RoomContainer
+	%PlaylistBuilder.visible = screen == %PlaylistBuilder
 	if screen == %BrowserContainer:
 		browser_refresh_timer.start()
 	else:
 		browser_refresh_timer.stop()
+	_update_nav.call_deferred()
 
 
 func _show_center_panel(panel: Control) -> void:
 	_show_screen(%CenterContainer)
-	for candidate in [%ChoicePanel, %HostForm, %CodePanel, %PasswordPanel, %SubmitPanel]:
+	for candidate in [%ChoicePanel, %HostForm, %CodePanel, %PasswordPanel, %SubmitChoicePanel, %SubmitPanel]:
 		candidate.visible = candidate == panel
 	# The host form is tall enough that it carries its own Back next to Create.
 	%BackButton.visible = panel != %HostForm
+	_update_nav.call_deferred()
 
 
 func _show_choice_state() -> void:
@@ -279,9 +390,17 @@ func _set_status(text: String) -> void:
 func _on_back_pressed() -> void:
 	if Workshop.is_uploading:
 		return
+	if %SubmitPanel.visible:
+		if submit_from_builder:
+			_show_playlist_builder()
+		else:
+			_show_submit_choice()
 	# Back from whichever screen Main opened us on goes straight to the menu.
-	if %ChoicePanel.visible or (dummy_lobby and %HostForm.visible) \
-			or (Global.multiplayer_lobby_entry == "submit" and %SubmitPanel.visible):
+	elif %ChoicePanel.visible or (dummy_lobby and %HostForm.visible) \
+			or (Global.multiplayer_lobby_entry == "submit" and %SubmitChoicePanel.visible) \
+			or (Global.multiplayer_lobby_entry == "host" and %HostForm.visible) \
+			or (Global.multiplayer_lobby_entry == "join" and %CodePanel.visible) \
+			or (Global.multiplayer_lobby_entry == "browse" and %BrowserContainer.visible):
 		_go_to_main_menu()
 	else:
 		_show_entry_screen()
@@ -291,13 +410,40 @@ func _on_back_pressed() -> void:
 func _go_to_main_menu() -> void:
 	_leave_lobby()
 	Global.return_to_multiplayer_menu = true
-	get_tree().change_scene_to_file("res://Main/Main.tscn")
+	get_tree().change_scene_to_file(Global.MENU_SCENE)
 
 
 # --- Submit playlist to Workshop -----------------------------------------
 
-func _show_submit_panel() -> void:
+# Two ways in: upload a ready-made .json, or build one in the game.
+func _show_submit_choice() -> void:
+	_show_center_panel(%SubmitChoicePanel)
+	%SubmitFileButton.grab_focus()
+	_set_status("Share a playlist on the Workshop: submit a .json file, or browse Wikipedia and build one here.")
+
+
+func _show_playlist_builder() -> void:
+	_show_screen(%PlaylistBuilder)
+	%PlaylistBuilder.open()
+
+
+func _on_builder_continue(playlist: Dictionary) -> void:
+	var check = Workshop.validate_playlist_text(JSON.stringify(playlist))
+	if not check.ok:
+		%PlaylistBuilder.status_label.text = check.error
+		return
+	_show_submit_panel(true)
+	submit_playlist = check.playlist
+	%ChosenFileLabel.text = "Built in game (%d articles)" % submit_playlist.size()
+	_set_status("Give your playlist a name and upload it.")
+	_update_upload_button()
+
+
+func _show_submit_panel(from_builder: bool = false) -> void:
+	submit_from_builder = from_builder
 	_show_center_panel(%SubmitPanel)
+	# A built playlist is already chosen - only "Submit a File" picks one.
+	%ChooseFileButton.visible = not from_builder
 	submit_playlist = {}
 	uploaded_file_id = 0
 	%WorkshopTitleInput.clear()
@@ -794,7 +940,7 @@ func _update_browser_playlist_filter() -> void:
 
 func _build_lobby_header() -> void:
 	for column in LOBBY_COLUMNS:
-		%LobbyHeader.add_child(_make_lobby_cell(column[0].to_upper(), column[1], LOBBY_HEADER_COLOR, 15))
+		%LobbyHeader.add_child(_make_lobby_cell(column[0].to_upper(), column[1], "ColumnHeader"))
 	var spacer = Control.new()
 	spacer.custom_minimum_size = Vector2(LOBBY_JOIN_COLUMN_WIDTH, 0)
 	%LobbyHeader.add_child(spacer)
@@ -802,41 +948,37 @@ func _build_lobby_header() -> void:
 
 # A plain Label, not RichTextLabel - host name and title are typed by other
 # players, so they must never be parsed as BBCode.
-func _make_lobby_cell(text: String, ratio: float, color: Color, font_size: int = 18) -> Label:
+func _make_lobby_cell(text: String, ratio: float, variation: String = "BodyLabel", color_name: String = "") -> Label:
 	var label = Label.new()
 	label.text = text
+	label.theme_type_variation = variation
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_stretch_ratio = ratio
 	label.clip_text = true
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", font_size)
+	if not color_name.is_empty():
+		label.add_theme_color_override("font_color", get_theme_color(color_name, "Hub"))
 	return label
 
 
 func _build_lobby_row(found_id: int, info: Dictionary, index: int) -> Control:
 	var panel = PanelContainer.new()
-	var style = StyleBoxFlat.new()
-	style.bg_color = LOBBY_ROW_COLORS[index % LOBBY_ROW_COLORS.size()]
-	style.set_corner_radius_all(6)
-	style.content_margin_left = 10
-	style.content_margin_right = 6
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	panel.add_theme_stylebox_override("panel", style)
+	panel.theme_type_variation = LOBBY_ROW_STYLES[index % LOBBY_ROW_STYLES.size()]
+	panel.custom_minimum_size.y = 44
 
 	var row = HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	panel.add_child(row)
 
-	var white = Color(0.93, 0.94, 0.96)
-	row.add_child(_make_lobby_cell(info.title, LOBBY_COLUMNS[0][1], white))
-	row.add_child(_make_lobby_cell(info.host, LOBBY_COLUMNS[1][1], Color(HOST_CHAT_COLOR)))
-	row.add_child(_make_lobby_cell(info.playlist, LOBBY_COLUMNS[2][1], white))
+	row.add_child(_make_lobby_cell(info.title, LOBBY_COLUMNS[0][1], "NameLabel"))
+	row.add_child(_make_lobby_cell(info.host, LOBBY_COLUMNS[1][1], "BodyLabel", "host_name"))
+	row.add_child(_make_lobby_cell(info.playlist, LOBBY_COLUMNS[2][1], "MutedLabel"))
 	row.add_child(_make_lobby_cell("Password" if info.locked else "Open", LOBBY_COLUMNS[3][1],
-		LOBBY_LOCKED_COLOR if info.locked else LOBBY_OPEN_COLOR))
+		"AccentSmall", "warning" if info.locked else "added"))
 
 	var join_button = Button.new()
+	join_button.theme_type_variation = "SmallButton"
+	join_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	join_button.text = "Join"
 	join_button.custom_minimum_size = Vector2(LOBBY_JOIN_COLUMN_WIDTH, 0)
 	join_button.pressed.connect(_on_browser_join_pressed.bind(found_id, info.locked))
@@ -862,16 +1004,17 @@ func _show_room() -> void:
 func _update_room() -> void:
 	var host_name = _member_name(host_id)
 	var title = host_game_name if dummy_lobby else Steam.getLobbyData(lobby_id, TITLE_LOBBY_KEY)
-	%RoomTitle.text = "%s's game - %s" % [host_name, title]
+	# The host's name is under their avatar already - the title is just the game name.
+	%RoomTitle.text = title if not title.is_empty() else "%s's game" % host_name
 
 	%HostName.text = host_name
-	%HostName.add_theme_color_override("font_color", Color(HOST_CHAT_COLOR))
+	%HostName.add_theme_color_override("font_color", get_theme_color("host_name", "Hub"))
 	_load_avatar(host_id, %HostAvatar)
 
 	# Same colors as their names in the lobby chat - only once someone's there.
 	var guest_named = guest_id != 0 and not (is_host and not guest_verified)
 	if guest_named:
-		%GuestName.add_theme_color_override("font_color", Color(GUEST_CHAT_COLOR))
+		%GuestName.add_theme_color_override("font_color", get_theme_color("guest_name", "Hub"))
 	else:
 		%GuestName.remove_theme_color_override("font_color")
 	if guest_id == 0:
@@ -943,8 +1086,8 @@ func _send_chat() -> void:
 
 
 func _add_player_chat(user: int, text: String) -> void:
-	var color = HOST_CHAT_COLOR if user == host_id else GUEST_CHAT_COLOR
-	%ChatLog.append_text("[color=%s][b]%s:[/b][/color] %s\n" % [
+	var color = get_theme_color("host_name" if user == host_id else "guest_name", "Hub").to_html(false)
+	%ChatLog.append_text("[color=#%s][b]%s:[/b][/color] %s\n" % [
 		color,
 		_escape_bbcode(_member_name(user)),
 		_escape_bbcode(text.left(MAX_CHAT_LENGTH)),
@@ -952,7 +1095,7 @@ func _add_player_chat(user: int, text: String) -> void:
 
 
 func _add_system_chat(text: String) -> void:
-	%ChatLog.append_text("[i]%s[/i]\n" % _escape_bbcode(text))
+	%ChatLog.append_text("[color=#%s][i]%s[/i][/color]\n" % [get_theme_color("muted", "Hub").to_html(false), _escape_bbcode(text)])
 
 
 func _escape_bbcode(text: String) -> String:

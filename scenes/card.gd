@@ -96,6 +96,21 @@ func _ready() -> void:
 		# moves them into Hand, so the pile of face-up cards never shows
 		# through the deck.
 		visible = false
+	var style := preload("res://ui/match/match_style.gd")
+	if style.active():
+		# Paper card (hub theme): surface fill, ink border and text.
+		style.set_rect($MinimalBackground.material, style.color("surface"), style.color("border"), 1.5, 3.0)
+		$CardTitle.add_theme_color_override("default_color", style.color("text"))
+		$CardTitle.add_theme_font_override("normal_font", preload("res://ui/fonts/fraunces_600.tres"))
+		for label in [$Description, $Description2, $EffectText]:
+			label.add_theme_font_override("normal_font", preload("res://ui/fonts/plex_400.tres"))
+			label.add_theme_font_size_override("normal_font_size", 14)
+		$Description.add_theme_color_override("default_color", style.color("muted"))
+		$Description2.add_theme_color_override("default_color", style.color("accent"))
+		$EffectText.add_theme_color_override("default_color", style.color("text"))
+		# Plex wraps taller than the old font - keep the bonus line under the description.
+		$Description.finished.connect(_place_secondary_text)
+		_place_secondary_text.call_deferred()
 	if Global.is_multiplayer_match:
 		# Text-only in multiplayer: just title + description, which gets the
 		# full card width and the space the effect text/icon used to take.
@@ -109,6 +124,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	pass
+
+
+func _place_secondary_text() -> void:
+	$Description2.position.y = maxf($Description.position.y + $Description.get_content_height() + 6, 100.0)
 
 
 func play_card():

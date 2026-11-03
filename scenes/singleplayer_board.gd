@@ -7,8 +7,10 @@ class_name SingleplayerBoard
 # a run panel where the opponent would be. Same rules as the Legacy Board
 # (board.gd) - card.gd and deck.gd call the same update_* methods on it.
 
+const MatchStyle := preload("res://ui/match/match_style.gd")
 const TITLE_Y := 36.0
-const CORRECT_COLOR := Color(0.45, 0.9, 0.5)
+const CORRECT_COLOR := Color(0.45, 0.9, 0.5)  # Round.show_banner maps it to the paper green
+const HIDDEN_ALPHA := 0.45  # hidden sentences: faint underscores, revealed text in ink
 const WRONG_GUESS_DAMAGE := 50
 const CORRECT_GUESS_HEAL := 50
 # Category / difficulty reveal cost, same as Legacy's CategoryReveal and
@@ -29,7 +31,7 @@ func _ready() -> void:
 	Global.run.current_round.article_title_length = get_title_count(Global.run.current_round.article_title)
 	Global.run.current_round.vowels_revealed = false
 
-	%RoundLabel.text = "Round %d" % Global.run.round_number
+	%RoundLabel.text = "ROUND %d" % Global.run.round_number
 	$ArticleTitle.position.y = TITLE_Y
 	_center_title()
 	# The text size option can grow the title past its default width.
@@ -60,13 +62,13 @@ func reveal_chunk(index: int, chunk: String):
 
 	var label = vbox.get_child(index) as RichTextLabel
 	if label:
-		var original_color = label.get_theme_color("default_color")
+		var original_color = MatchStyle.color("text")
 		label.text = chunk
 		var tween = create_tween()
 		tween.tween_method(
 			func(color):
 				label.add_theme_color_override("default_color", color),
-			Color("#78FF67"),
+			MatchStyle.color("added"),
 			original_color,
 			0.5
 		)
@@ -91,6 +93,7 @@ func update_board_chunks():
 			hidden_text += c if c == " " or c == "\n" else "_"
 		label.text = hidden_text
 		label.fit_content = true
+		label.add_theme_color_override("default_color", Color(MatchStyle.color("muted"), HIDDEN_ALPHA))
 		vbox.add_child(label)
 
 
@@ -164,9 +167,13 @@ func correct_guess():
 	SoundManagerScript.play_sound("res://assets/sounds/achievements/" + Global.getArticleAchSound(Global.run.current_round.current_id), "SFX")
 	Global.run.current_round.card_playable = false
 	Global.run.Health.heal(CORRECT_GUESS_HEAL)
+	var points = Leaderboards.record_correct_guess()
 
 	$ArticleTitle.text = Global.run.current_round.article_title
-	get_parent().show_banner("Correct!", CORRECT_COLOR)
+	var banner = "Correct!"
+	if Global.run.current_game_mode == Global.run.GameMode.HARDCORE:
+		banner += " +%d" % points
+	get_parent().show_banner(banner, CORRECT_COLOR)
 	await get_tree().create_timer(2).timeout
 	Global.run.current_round.card_playable = true
 
@@ -184,8 +191,9 @@ func _advance_round() -> void:
 func _build_skip_buttons() -> void:
 	for i in range(Global.run.number_of_skips):
 		var button = Button.new()
-		button.text = ">"
-		button.custom_minimum_size = Vector2(40, 0)
+		button.text = "Skip"
+		button.theme_type_variation = "SmallButton"
+		button.custom_minimum_size = Vector2(68, 30)
 		button.focus_mode = Control.FOCUS_NONE
 		button.tooltip_text = "Skip this round"
 		button.pressed.connect(_on_skip_pressed)

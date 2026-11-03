@@ -35,6 +35,21 @@ func _ready() -> void:
 func _apply_skin() -> void:
 	$MinimalSkin.visible = Global.uses_modern_ui()
 	$ClassicSkin.visible = not Global.uses_modern_ui()
+	if preload("res://ui/match/match_style.gd").active():
+		_apply_paper_skin()
+
+
+# Hub paper look, matching the health bar above it (blue fill instead of red).
+func _apply_paper_skin() -> void:
+	var style := preload("res://ui/match/match_style.gd")
+	style.set_rect($MinimalSkin/Track.material, style.color("surface").darkened(0.08), style.color("border"), 1.0, 3.0)
+	style.set_rect($MinimalSkin/Fill.material, style.color("host_name"), Color.TRANSPARENT, 0.0, 3.0)
+	var label: RichTextLabel = $MinimalSkin/Label
+	label.add_theme_font_override("normal_font", preload("res://ui/fonts/plex_600.tres"))
+	label.add_theme_font_size_override("normal_font_size", 16)
+	label.add_theme_color_override("default_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", style.color("text"))
+	label.add_theme_constant_override("outline_size", 5)
 
 
 func set_display_vitals(mana: int, mana_max: int) -> void:
@@ -97,7 +112,7 @@ func update_mana_bar():
 	$MinimalSkin/Fill.size.x = fill_width
 	var mat: ShaderMaterial = $MinimalSkin/Fill.material
 	mat.set_shader_parameter("size", Vector2(fill_width, $MinimalSkin/Fill.size.y))
-	mat.set_shader_parameter("radius", min(6.0, fill_width * 0.5))
+	mat.set_shader_parameter("radius", min(3.0 if preload("res://ui/match/match_style.gd").active() else 6.0, fill_width * 0.5))
 
 	if not is_display_only:
 		Global.broadcast_vitals()

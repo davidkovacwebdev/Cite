@@ -5,7 +5,8 @@ class_name MultiplayerBoard
 const MAX_GUESS_DAMAGE := 600.0
 const TIMER_BAR_HEIGHT := 380.0
 const GRACE_PERIOD_SECONDS := 5.0
-const GRACE_COLOR := Color(0.749, 0.161, 0.161, 1)
+# Colours: the hub's paper theme (ui/hub/hub_theme.tres, "Hub" type).
+const MatchStyle := preload("res://ui/match/match_style.gd")
 # A title letter is auto-revealed on every Nth chunk reveal (see
 # _maybe_reveal_title_letter).
 const TITLE_LETTER_EVERY_N_CHUNKS := 2
@@ -41,11 +42,6 @@ const COUNTDOWN_TICK_PITCH_VARIATION := 0.08
 # follows) - this is the moment lined up with the timer running out.
 const TIMER_RISER_PEAK_SECONDS := 12.0
 const TITLE_Y := 36.0
-const STAKE_COLOR := Color(0.85, 0.86, 0.9)
-const STAKE_DOUBLED_COLOR := Color(1.0, 0.62, 0.25)
-const CHAT_MESSAGE_COLOR := "#e6e6e6"
-const CHAT_OWN_NAME_COLOR := "#7ee0a1"
-const CHAT_OPPONENT_NAME_COLOR := "#ff6b6b"
 
 const CardScene = preload("res://scenes/Card.tscn")
 
@@ -107,7 +103,7 @@ func _ready() -> void:
 	Global.run.current_round.vowels_revealed = false
 
 	# An armed effect only lasts the round it was activated in - carrying it
-	# into a fresh round (with a different title) would be confusing. The
+	# into a fresh round (with a  different title) would be confusing. The
 	# card that armed it is already gone from the hand either way.
 	Global.run.double_down_armed = false
 	Global.opponent_double_down_armed = false
@@ -286,7 +282,7 @@ func _revealable_letters(title: String, censored: String, from: int, to: int) ->
 func _start_grace_period() -> void:
 	in_grace_period = true
 	var mat: ShaderMaterial = $RevealTimerBar.material
-	mat.set_shader_parameter("color", GRACE_COLOR)
+	mat.set_shader_parameter("color", MatchStyle.color("accent"))
 	_start_reveal_timer(GRACE_PERIOD_SECONDS)
 
 
@@ -332,10 +328,10 @@ func _on_chat_submitted(text: String) -> void:
 func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
 	# Both strings come from other players - escape "[" so they can't inject
 	# BBCode into the log.
-	%ChatLog.append_text("[color=%s][b]%s:[/b][/color] [color=%s]%s[/color]\n" % [
-		CHAT_OWN_NAME_COLOR if is_own else CHAT_OPPONENT_NAME_COLOR,
+	%ChatLog.append_text("[color=#%s][b]%s:[/b][/color] [color=#%s]%s[/color]\n" % [
+		MatchStyle.color("host_name" if is_own else "guest_name").to_html(false),
 		sender_name.replace("[", "[lb]"),
-		CHAT_MESSAGE_COLOR,
+		MatchStyle.color("text").to_html(false),
 		text.replace("[", "[lb]"),
 	])
 
@@ -405,7 +401,7 @@ func reveal_chunk(index: int, chunk:String):
 	var label = vbox.get_child(index) as RichTextLabel
 	if label:
 		# Store original text color
-		var original_color = label.get_theme_color("default_color")
+		var original_color = MatchStyle.color("text")  # hidden ones are faint, revealed = ink
 
 		# Set the text
 		label.text = chunk
@@ -415,7 +411,7 @@ func reveal_chunk(index: int, chunk:String):
 		tween.tween_method(
 			func(color):
 				label.add_theme_color_override("default_color", color),
-			Color("#78FF67"),  # Your custom hex color
+			MatchStyle.color("added"),  # revealed chunk flashes green, then fades to ink
 			original_color,
 			0.5
 		)
@@ -441,6 +437,8 @@ func update_board_chunks():
 
 		label.text = hidden_text
 		label.fit_content = true
+		# Hidden sentences are faint so the revealed ones stand out.
+		label.add_theme_color_override("default_color", Color(MatchStyle.color("muted"), 0.45))
 		vbox.add_child(label)
 
 
@@ -773,7 +771,7 @@ func _build_reward_card_visual(key: String) -> Card:
 # get_parent() is HBoxContainer) never fires here.
 func _build_reward_overlay(key_a: String, key_b: String, label_text: String) -> Dictionary:
 	var overlay = ColorRect.new()
-	overlay.color = Color(0, 0, 0, 0.65)
+	overlay.color = MatchStyle.color("overlay_dim")
 	overlay.position = Vector2.ZERO
 	overlay.size = get_viewport_rect().size
 	# STOP (rather than the board's usual click-through) is the point here -
@@ -785,8 +783,9 @@ func _build_reward_overlay(key_a: String, key_b: String, label_text: String) -> 
 
 	var label = Label.new()
 	label.text = label_text
-	label.add_theme_font_size_override("font_size", 28)
-	label.add_theme_color_override("font_color", Color.WHITE)
+	label.add_theme_font_size_override("font_size", 30)
+	label.add_theme_font_override("font", preload("res://ui/fonts/fraunces_600.tres"))
+	label.add_theme_color_override("font_color", MatchStyle.color("surface"))
 	overlay.add_child(label)
 	label.position = Vector2(overlay.size.x / 2 - label.size.x / 2, 80)
 
@@ -814,10 +813,10 @@ func _build_reward_overlay(key_a: String, key_b: String, label_text: String) -> 
 	timer_bar.position = Vector2(overlay.size.x / 2 - REWARD_TIMER_BAR_WIDTH / 2, overlay.size.y / 2 + 160)
 	var timer_bar_mat := ShaderMaterial.new()
 	timer_bar_mat.shader = load("res://components/rounded_rect.gdshader")
-	timer_bar_mat.set_shader_parameter("color", Color(0.533, 0.341, 0.71, 1))
+	timer_bar_mat.set_shader_parameter("color", MatchStyle.color("accent"))
 	timer_bar_mat.set_shader_parameter("size", Vector2(REWARD_TIMER_BAR_WIDTH, REWARD_TIMER_BAR_HEIGHT))
 	timer_bar_mat.set_shader_parameter("radius", 6.0)
-	timer_bar_mat.set_shader_parameter("glow_strength", 0.35)
+	timer_bar_mat.set_shader_parameter("glow_strength", 0.0)
 	timer_bar_mat.set_shader_parameter("glow_width", 0.2)
 	timer_bar_mat.set_shader_parameter("glow_flicker_speed", 3.0)
 	timer_bar.material = timer_bar_mat
@@ -880,7 +879,7 @@ func _add_reward_card_hover(card: Card) -> void:
 	var mat := bg.material as ShaderMaterial
 	var base_border_color: Color = mat.get_shader_parameter("border_color")
 	var base_border_width: float = mat.get_shader_parameter("border_width")
-	var glow_color := Color(0.68, 0.36, 1.0, 1.0)
+	var glow_color := MatchStyle.color("accent")
 	var glow_width := 6.0
 
 	card.mouse_entered.connect(func():
@@ -917,7 +916,7 @@ func _play_card_highlight(card: Card) -> void:
 	var mat := bg.material as ShaderMaterial
 	var base_border_color: Color = mat.get_shader_parameter("border_color")
 	var base_border_width: float = mat.get_shader_parameter("border_width")
-	var glow_color := Color(0.68, 0.36, 1.0, 1.0)
+	var glow_color := MatchStyle.color("accent")
 	var glow_width := 6.0
 
 	var tween_in = create_tween()
@@ -1010,10 +1009,10 @@ func _update_stake_label() -> void:
 	var stake = _current_guess_damage() * multiplier
 	if multiplier > 1:
 		$StakeLabel.text = "Damage: %d (x%d)" % [stake, multiplier]
-		$StakeLabel.add_theme_color_override("font_color", STAKE_DOUBLED_COLOR)
+		$StakeLabel.add_theme_color_override("font_color", MatchStyle.color("warning"))
 	else:
 		$StakeLabel.text = "Damage: %d" % stake
-		$StakeLabel.add_theme_color_override("font_color", STAKE_COLOR)
+		$StakeLabel.add_theme_color_override("font_color", MatchStyle.color("muted"))
 
 
 func _center_title() -> void:

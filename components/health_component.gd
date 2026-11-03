@@ -53,6 +53,22 @@ func _ready() -> void:
 func _apply_skin() -> void:
 	$MinimalSkin.visible = Global.uses_modern_ui()
 	$ClassicSkin.visible = not Global.uses_modern_ui()
+	if preload("res://ui/match/match_style.gd").active():
+		_apply_paper_skin()
+
+
+# Hub paper look (multiplayer and single player; Legacy keeps the classic bar).
+func _apply_paper_skin() -> void:
+	var style := preload("res://ui/match/match_style.gd")
+	style.set_rect($MinimalSkin/Track.material, style.color("surface").darkened(0.08), style.color("border"), 1.0, 3.0)
+	style.set_rect($MinimalSkin/Trail.material, style.color("warning").lightened(0.45), Color.TRANSPARENT, 0.0, 3.0)
+	style.set_rect($MinimalSkin/Fill.material, style.color("accent"), Color.TRANSPARENT, 0.0, 3.0)
+	var label: RichTextLabel = $MinimalSkin/Label
+	label.add_theme_font_override("normal_font", preload("res://ui/fonts/plex_600.tres"))
+	label.add_theme_font_size_override("normal_font_size", 18)
+	label.add_theme_color_override("default_color", Color.WHITE)
+	label.add_theme_color_override("font_outline_color", style.color("text"))
+	label.add_theme_constant_override("outline_size", 5)
 
 
 func set_display_vitals(hp: int, hp_max: int) -> void:

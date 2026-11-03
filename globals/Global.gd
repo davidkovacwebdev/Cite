@@ -39,6 +39,16 @@ var multiplayer_playlist_id: String = "common_knowledge"
 # .json in MULTIPLAYER_PLAYLIST_FOLDER and it shows up in both places with
 # no code changes needed.
 func get_available_playlist_ids() -> Array:
+	var ids := get_official_playlist_ids()
+	# Approved Steam Workshop playlists ("ws_<file_id>") come after the
+	# built-in ones - see Workshop.gd.
+	ids.append_array(Workshop.get_playlist_ids())
+	return ids
+
+
+# The built-in (official) playlists, sorted - the .json files in
+# MULTIPLAYER_PLAYLIST_FOLDER.
+func get_official_playlist_ids() -> Array:
 	var ids: Array = []
 	var dir = DirAccess.open(MULTIPLAYER_PLAYLIST_FOLDER)
 	if not dir:
@@ -53,9 +63,42 @@ func get_available_playlist_ids() -> Array:
 		filename = dir.get_next()
 	dir.list_dir_end()
 	ids.sort()
-	# Approved Steam Workshop playlists ("ws_<file_id>") come after the
-	# built-in ones - see Workshop.gd.
-	ids.append_array(Workshop.get_playlist_ids())
+	return ids
+
+
+# Virtual playlist: every official playlist merged. Find Match / Quick Play
+# and the Daily Challenge draw from it (community playlists stay opt-in via
+# private rooms).
+const OFFICIAL_POOL := "official"
+
+
+# Wikipedia page ids in a playlist, in a fixed order both players agree on
+# (file order for one playlist; sorted and de-duplicated for OFFICIAL_POOL).
+func get_playlist_article_ids(playlist_id: String) -> Array:
+	if playlist_id == OFFICIAL_POOL:
+		var merged := {}
+		for id in get_official_playlist_ids():
+			for article_id in _read_playlist_ids(get_playlist_path(id)):
+				merged[article_id] = true
+		var ids: Array = merged.keys()
+		ids.sort()
+		return ids
+	return _read_playlist_ids(get_playlist_path(playlist_id))
+
+
+func _read_playlist_ids(path: String) -> Array:
+	var ids: Array = []
+	var file := FileAccess.open(path, FileAccess.READ)
+	if not file:
+		push_error("Failed to open playlist: " + path)
+		return ids
+	var data = JSON.parse_string(file.get_as_text())
+	file.close()
+	if not data is Dictionary:
+		push_error("Failed to parse playlist: " + path)
+		return ids
+	for id in data.values():
+		ids.append(int(id))
 	return ids
 
 
@@ -68,6 +111,8 @@ func get_playlist_path(playlist_id: String) -> String:
 # Built-ins are named after their file (common_knowledge -> "Common
 # Knowledge"), community ones by their Workshop title.
 func get_playlist_display_name(playlist_id: String) -> String:
+	if playlist_id == OFFICIAL_POOL:
+		return "All official playlists"
 	if Workshop.is_community_id(playlist_id):
 		var title = Workshop.get_title(Workshop.file_id_of(playlist_id))
 		return (title if not title.is_empty() else "Community playlist") + " (Community)"
@@ -78,6 +123,11 @@ func get_playlist_display_name(playlist_id: String) -> String:
 # these before a match, since the article order (and so the whole match)
 # comes from the file - "" if this player doesn't have it.
 func get_playlist_hash(playlist_id: String) -> String:
+	if playlist_id == OFFICIAL_POOL:
+		var parts := PackedStringArray()
+		for id in get_official_playlist_ids():
+			parts.append(id + ":" + get_playlist_hash(id))
+		return ",".join(parts).md5_text()
 	var path = get_playlist_path(playlist_id)
 	if not FileAccess.file_exists(path):
 		return ""
@@ -109,6 +159,12 @@ var multiplayer_lobby_entry: String = "browse"
 # Set when leaving MultiplayerLobby with Back, so Main reopens on its
 # Multiplayer submenu instead of the top-level menu.
 var return_to_multiplayer_menu: bool = false
+# Same for the Leaderboards screen and the Game submenu.
+var return_to_game_menu: bool = false
+# Room code typed into the hub's Private Match card (lobby entry "join").
+var pending_lobby_code: String = ""
+# Where "back to the menu" goes: the new hub (Main.tscn is kept, unused).
+const MENU_SCENE := "res://ui/hub/hub.tscn"
 
 var debug_forced_article_id: int = 0
 

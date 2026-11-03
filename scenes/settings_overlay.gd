@@ -28,6 +28,8 @@ func _ready() -> void:
 	var open_button = Button.new()
 	open_button.text = "Settings"
 	open_button.add_theme_font_size_override("font_size", 13)
+	if preload("res://ui/match/match_style.gd").active():
+		open_button.theme_type_variation = "SmallButton"
 	open_button.position = Vector2(12, 608)
 	open_button.focus_mode = Control.FOCUS_NONE
 	open_button.pressed.connect(toggle)
@@ -63,8 +65,9 @@ func toggle() -> void:
 
 
 func _build_panel() -> void:
+	var paper: bool = preload("res://ui/match/match_style.gd").active()  # hub paper look (theme set by Round)
 	panel_root = ColorRect.new()
-	panel_root.color = Color(0, 0, 0, 0.55)
+	panel_root.color = preload("res://ui/match/match_style.gd").color("overlay_dim") if paper else Color(0, 0, 0, 0.55)
 	panel_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel_root.mouse_filter = Control.MOUSE_FILTER_STOP  # blocks cards/chat underneath
 	add_child(panel_root)
@@ -74,13 +77,16 @@ func _build_panel() -> void:
 	panel_root.add_child(center)
 
 	var panel = PanelContainer.new()
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.067, 0.071, 0.086, 0.9)
-	style.border_color = Color(0.247, 0.259, 0.286, 1)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(10)
-	style.set_content_margin_all(20)
-	panel.add_theme_stylebox_override("panel", style)
+	if paper:
+		panel.theme_type_variation = "ModalPanel"
+	else:
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.067, 0.071, 0.086, 0.9)
+		style.border_color = Color(0.247, 0.259, 0.286, 1)
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(10)
+		style.set_content_margin_all(20)
+		panel.add_theme_stylebox_override("panel", style)
 	center.add_child(panel)
 
 	var column = VBoxContainer.new()
@@ -88,7 +94,11 @@ func _build_panel() -> void:
 	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
 
-	column.add_child(_heading("Settings", 28))
+	var heading = _heading("Settings", 28)
+	if paper:
+		heading.theme_type_variation = "HeaderMedium"
+		heading.remove_theme_font_size_override("font_size")
+	column.add_child(heading)
 
 	column.add_child(_volume_slider("Master Volume", SoundManagerScript.master_volume, _on_master_volume_changed))
 	column.add_child(_volume_slider("SFX Volume", SoundManagerScript.sfx_volume, _on_sfx_volume_changed))
@@ -126,6 +136,9 @@ func _build_panel() -> void:
 	leave_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	leave_button.custom_minimum_size = Vector2(140, 0)
 	leave_button.pressed.connect(_on_leave_pressed)
+	if paper:
+		leave_button.theme_type_variation = "CtaButton"
+		leave_button.add_theme_font_size_override("font_size", 16)
 	column.add_child(leave_button)
 	leave_warning = Label.new()
 	if Global.is_multiplayer_match:
@@ -135,7 +148,8 @@ func _build_panel() -> void:
 	leave_warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	leave_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	leave_warning.add_theme_font_size_override("font_size", 14)
-	leave_warning.add_theme_color_override("font_color", LEAVE_WARNING_COLOR)
+	leave_warning.add_theme_color_override("font_color",
+		preload("res://ui/match/match_style.gd").color("accent") if paper else LEAVE_WARNING_COLOR)
 	leave_warning.visible = false
 	column.add_child(leave_warning)
 
@@ -144,6 +158,8 @@ func _build_panel() -> void:
 	close_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	close_button.custom_minimum_size = Vector2(140, 0)
 	close_button.pressed.connect(toggle)
+	if paper:
+		close_button.theme_type_variation = "GhostButton"
 	column.add_child(close_button)
 
 
@@ -161,7 +177,8 @@ func _checkbox(text: String) -> CheckBox:
 	var check = CheckBox.new()
 	check.text = text
 	check.add_theme_font_size_override("font_size", 14)
-	check.add_theme_icon_override("unchecked", _unchecked_icon())
+	if not preload("res://ui/match/match_style.gd").active():  # the hub theme has its own light box
+		check.add_theme_icon_override("unchecked", _unchecked_icon())
 	return check
 
 

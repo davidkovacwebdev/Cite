@@ -40,7 +40,7 @@ const CACHE_INDEX_PATH := CACHE_DIR + "index.json"
 const COLLECTION_DETAILS_URL := "https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/"
 const COLLECTION_TIMEOUT_SECONDS := 15.0
 
-const MIN_PLAYLIST_ARTICLES := 30
+const MIN_PLAYLIST_ARTICLES := 20
 const MAX_PLAYLIST_ARTICLES := 5000
 const MAX_TITLE_LENGTH := 128  # Steam's limit
 const MAX_DESCRIPTION_LENGTH := 8000  # Steam's limit
@@ -387,7 +387,7 @@ func _on_preview_downloaded(result: int, response_code: int, _headers: PackedStr
 		preview_downloads.erase(key)
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200 or not community_playlists.has(key):
 		return
-	var image = _image_from_bytes(body)
+	var image = image_from_bytes(body)
 	if image == null:
 		print("Workshop: couldn't read the preview image for playlist ", file_id)
 		return
@@ -403,7 +403,7 @@ func _on_preview_downloaded(result: int, response_code: int, _headers: PackedStr
 	community_playlists_changed.emit()
 
 
-func _image_from_bytes(bytes: PackedByteArray) -> Image:
+func image_from_bytes(bytes: PackedByteArray) -> Image:
 	if bytes.size() < 4:
 		return null
 	var image = Image.new()

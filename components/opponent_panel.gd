@@ -11,6 +11,11 @@ func _ready() -> void:
 		return
 
 	%NameLabel.text = Global.multiplayer_opponent_name
+	# Hub paper look: bordered panel + ink name (Round applies the theme).
+	$PlayerBox.remove_theme_stylebox_override("panel")
+	%NameLabel.theme_type_variation = "NameLabel"
+	%NameLabel.add_theme_font_size_override("font_size", 16)
+	%GuessToast.theme_type_variation = "AccentSmall"
 	%GuessToast.visible = false
 	if not Global.is_dummy_opponent:
 		_load_avatar()

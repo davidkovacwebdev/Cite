@@ -65,10 +65,12 @@ func _ready() -> void:
 	$CenterContainer/VBoxContainer/Multiplayer.pressed.connect(_on_multiplayer_pressed)
 	$CenterContainer/VBoxContainer/SinglePlayer.pressed.connect(_on_single_player_pressed.bind(false))
 	$CenterContainer/VBoxContainer/Legacy.pressed.connect(_on_single_player_pressed.bind(true))
+	$CenterContainer/VBoxContainer/Leaderboards.pressed.connect(_on_leaderboards_pressed)
 	$CenterContainer/VBoxContainer/ModeBack.pressed.connect(_on_mode_back_pressed)
 	_connect_tip($CenterContainer/VBoxContainer/Multiplayer, "Play against another person online, matched via Steam")
 	_connect_tip($CenterContainer/VBoxContainer/SinglePlayer, "Guess article after article on your own, with your deck of cards")
 	_connect_tip($CenterContainer/VBoxContainer/Legacy, "Single player with its original look and layout")
+	_connect_tip($CenterContainer/VBoxContainer/Leaderboards, "Best single player runs, per playlist and in Hardcore")
 	$CenterContainer/VBoxContainer/FindMatch.pressed.connect(_on_find_match_pressed)
 	$CenterContainer/VBoxContainer/SubmitPlaylist.pressed.connect(_on_submit_playlist_pressed)
 	$CenterContainer/VBoxContainer/LobbyDummy.pressed.connect(_on_lobby_dummy_pressed)
@@ -93,6 +95,9 @@ func _ready() -> void:
 		Global.return_to_multiplayer_menu = false
 		show_mode_selection()
 		show_multiplayer_menu()
+	elif Global.return_to_game_menu:
+		Global.return_to_game_menu = false
+		show_mode_selection()
 	
 
 # Shows just the named menu items (children of the VBoxContainer).
@@ -105,14 +110,14 @@ func _show_menu_items(names: Array) -> void:
 	$MainMenuQuotes.text = get_random_menu_quote()
 
 
-# Show main menu (Play, Credits, Tutorial, Settings, Exit)
+# Show main menu (Game, Credits, Tutorial, Settings, Exit)
 func show_main_menu():
 	_show_menu_items(["Play", "Credits", "Tutorial", "Settings", "Exit"])
 
 
-# Show game mode selection (Multiplayer, Single Player, Legacy, Back)
+# Show game mode selection (Multiplayer, Single Player, Leaderboards, Legacy, Back)
 func show_mode_selection():
-	_show_menu_items(["Multiplayer", "SinglePlayer", "Legacy", "Back"])
+	_show_menu_items(["Multiplayer", "SinglePlayer", "Leaderboards", "Legacy", "Back"])
 
 
 # Show multiplayer submenu (Find / Host a Game, Submit Playlist, Lobby Dummy, Back)
@@ -155,6 +160,11 @@ func _on_back_pressed():
 func _on_single_player_pressed(legacy: bool):
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
 	show_single_player_menu(legacy)
+
+
+func _on_leaderboards_pressed():
+	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
+	get_tree().change_scene_to_file("res://scenes/LeaderboardScreen.tscn")
 
 
 func _on_mode_back_pressed():

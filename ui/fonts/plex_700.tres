@@ -1,0 +1,11 @@
+[gd_resource type="FontVariation" format=3 uid="uid://b4qq4o5ymmlgn"]
+
+[ext_resource type="FontFile" uid="uid://rwvgubfo72io" path="res://ui/fonts/IBMPlexSans.ttf" id="1_bxr5e"]
+
+[resource]
+base_font = ExtResource("1_bxr5e")
+variation_opentype = {
+2003072104: 100,
+2003265652: 700
+}
+spacing_glyph = 1

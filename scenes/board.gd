@@ -112,6 +112,7 @@ func correct_guess():
 	SoundManagerScript.play_sound("res://assets/sounds/achievements/"+Global.getArticleAchSound(Global.run.current_round.current_id),"SFX")
 	Global.run.current_round.card_playable = false
 	Global.run.Health.heal(50)
+	Leaderboards.record_correct_guess()
 
 	$InputField.text = "Bingooo"
 	$ArticleTitle.text = Global.run.current_round.article_title

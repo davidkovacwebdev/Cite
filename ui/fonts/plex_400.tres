@@ -1,0 +1,10 @@
+[gd_resource type="FontVariation" format=3 uid="uid://ddpy6bdpr5532"]
+
+[ext_resource type="FontFile" uid="uid://rwvgubfo72io" path="res://ui/fonts/IBMPlexSans.ttf" id="1_6pyli"]
+
+[resource]
+base_font = ExtResource("1_6pyli")
+variation_opentype = {
+2003072104: 100,
+2003265652: 400
+}

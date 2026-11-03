@@ -18,6 +18,9 @@ var article_title_length
 var article_main_category
 var article_related_categories
 var article_difficulty
+# Hardcore only: the article's average daily Wikipedia views over the last
+# 30 days, -1 if Wikipedia didn't say. Sets its leaderboard points.
+var article_daily_views: float = -1.0
 var article_censored_title
 var current_board
 var current_deck
@@ -31,6 +34,7 @@ var card_playable:bool = true
 var curent_board
 
 var SkipScene = preload("res://scenes/Skip.tscn")
+const MatchStyle := preload("res://ui/match/match_style.gd")
 
 
 # Called when the node enters the scene tree for the first time.
@@ -59,6 +63,7 @@ func _ready() -> void:
 		_setup_self_identity()
 		if Global.is_dummy_opponent:
 			add_child(DummyOpponent.new())
+		_apply_match_style()
 	elif Global.uses_modern_ui():
 		# Single player in the match layout: same player box, with the mana
 		# bar under the health bar pushing avatar + name down.
@@ -73,6 +78,7 @@ func _ready() -> void:
 		$DifficultyReveal/Area2D.input_pickable = false
 		add_child(SettingsOverlay.new())
 		_setup_self_identity()
+		_apply_match_style()
 
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -137,7 +143,22 @@ func end_round():
 	Engine.get_main_loop().reload_current_scene()
 
 
+# Multiplayer and single player (not Legacy): the hub's paper look.
+func _apply_match_style() -> void:
+	MatchStyle.apply(self)
+	$Background.color = MatchStyle.color("bg")
+	# Player boxes: the theme's bordered paper panel instead of the grey tint.
+	%SelfPlayerBox.remove_theme_stylebox_override("panel")
+	%SelfNameLabel.theme_type_variation = "NameLabel"
+	%SelfNameLabel.add_theme_font_size_override("font_size", 16)
+	%StatusOverlay.add_theme_color_override("font_outline_color", Color(MatchStyle.color("bg"), 0.9))
+	%StatusOverlay.add_theme_font_override("font", preload("res://ui/fonts/fraunces_600.tres"))
+	%BigBanner.add_theme_font_override("normal_font", preload("res://ui/fonts/fraunces_600.tres"))
+
+
 func show_banner(text: String, color: Color = Color(0.75, 0.08, 0.08)) -> void:
+	if MatchStyle.active():
+		color = MatchStyle.paper(color)
 	var banner = %BigBanner
 	banner.text = text
 	banner.add_theme_color_override("default_color", color)
@@ -163,11 +184,15 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 	layer.add_child(center)
 
 	var panel = PanelContainer.new()
+	var paper := MatchStyle.active()
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.085, 0.1, 0.95)
-	style.border_color = Color(0.533, 0.341, 0.71, 1)
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(14)
+	style.bg_color = MatchStyle.color("surface") if paper else Color(0.08, 0.085, 0.1, 0.95)
+	style.border_color = MatchStyle.color("text") if paper else Color(0.533, 0.341, 0.71, 1)
+	if paper:
+		style.shadow_color = Color(MatchStyle.color("text"), 0.15)
+		style.shadow_size = 12
+	style.set_border_width_all(1 if paper else 3)
+	style.set_corner_radius_all(3 if paper else 14)
 	style.content_margin_left = 40
 	style.content_margin_right = 40
 	style.content_margin_top = 18
@@ -183,14 +208,16 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 	var caption = Label.new()
 	caption.text = caption_text
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	caption.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	caption.add_theme_color_override("font_color", MatchStyle.color("muted") if paper else Color(0.7, 0.7, 0.75))
 	caption.add_theme_font_size_override("font_size", 20)
 	vbox.add_child(caption)
 
 	var answer = Label.new()
 	answer.text = title
 	answer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	answer.add_theme_color_override("font_color", Color.WHITE)
+	answer.add_theme_color_override("font_color", MatchStyle.color("text") if paper else Color.WHITE)
+	if paper:
+		answer.add_theme_font_override("font", preload("res://ui/fonts/fraunces_600.tres"))
 	answer.add_theme_font_size_override("font_size", 48 if title.length() <= 16 else (36 if title.length() <= 26 else 28))
 	vbox.add_child(answer)
 
@@ -198,7 +225,7 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 		var footer_label = Label.new()
 		footer_label.text = footer
 		footer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		footer_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+		footer_label.add_theme_color_override("font_color", MatchStyle.color("muted") if paper else Color(0.7, 0.7, 0.75))
 		footer_label.add_theme_font_size_override("font_size", 18)
 		vbox.add_child(footer_label)
 
@@ -212,6 +239,8 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 # Big see-through text over the middle of the screen for a card effect
 # (Freeze, Static) - pops in, holds, then drifts up as it fades out.
 func show_status(text: String, color: Color = Color.WHITE) -> void:
+	if MatchStyle.active():
+		color = MatchStyle.paper(color)
 	var label = %StatusOverlay
 	if label.has_meta("tween"):
 		label.get_meta("tween").kill()
