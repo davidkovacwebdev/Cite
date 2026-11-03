@@ -1,0 +1,56 @@
+# Keeps the Daily Challenge schedule filled a week ahead. The game downloads
+# daily/schedule.json from the daily-data branch (see ui/daily/daily_state.gd),
+# so new Dailies need no game update. Run it by hand from the Actions tab
+# ("Run workflow") to fill now, or give a date to pick a new set for that day.
+name: Daily schedule
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      reroll:
+        description: "Pick a new set for this date (YYYY-MM-DD) - leave empty to only fill missing days"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency: daily-schedule
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the game (playlists + script)
+        uses: actions/checkout@v4
+
+      - name: Check out the schedule branch
+        uses: actions/checkout@v4
+        with:
+          ref: daily-data
+          path: data
+
+      - name: Fill the schedule
+        env:
+          REROLL: ${{ github.event.inputs.reroll }}
+        run: |
+          if [ -n "$REROLL" ]; then
+            python3 tools/daily_schedule.py --schedule data/daily/schedule.json --reroll "$REROLL"
+          else
+            python3 tools/daily_schedule.py --schedule data/daily/schedule.json
+          fi
+
+      - name: Commit and push
+        working-directory: data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add daily/schedule.json
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Daily schedule update"
+          git push
