@@ -10,7 +10,6 @@ const DailyState := preload("res://ui/daily/daily_state.gd")
 const CACHE := "user://article_highlight.json"
 const IMAGE_CACHE := "user://article_highlight.img"
 const API := "https://en.wikipedia.org/w/api.php?action=query&prop=pageimages%%7Cextracts&piprop=thumbnail&pithumbsize=640&exintro=1&explaintext=1&exsentences=2&exlimit=20&pageids=%s&format=json&origin=*"
-const HEADERS := ["User-Agent: Cite/1.0 (https://github.com/davidkovacwebdev/Cite)"]
 const BATCH := 20
 const TIMEOUT := 8.0
 
@@ -102,7 +101,7 @@ static func _fetch(host: Node, url: String) -> PackedByteArray:
 	var http := HTTPRequest.new()
 	http.timeout = TIMEOUT
 	host.add_child(http)
-	if http.request(url, HEADERS) != OK:
+	if http.request(url, Global.WIKIPEDIA_HEADERS) != OK:
 		http.queue_free()
 		return PackedByteArray()
 	var res: Array = await http.request_completed

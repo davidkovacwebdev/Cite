@@ -241,7 +241,7 @@ func _request_search_page() -> void:
 	var url = API_URL + "action=query&generator=search&gsrnamespace=0&gsrlimit=%d&gsroffset=%d&gsrsearch=%s" \
 		% [SEARCH_LIMIT, search_offset, search_query.uri_encode()] \
 		+ "&prop=extracts%7Cpageprops&ppprop=disambiguation&exintro=true&explaintext=true&exlimit=max"
-	if search_request.request(url) != OK:
+	if search_request.request(url, Global.WIKIPEDIA_HEADERS) != OK:
 		_set_results_note("Couldn't reach Wikipedia.")
 
 
@@ -320,7 +320,7 @@ func _show_preview(page_id: int, title: String) -> void:
 	_update_preview_buttons()
 	var url = API_URL + "action=query&prop=extracts%%7Cpageprops%%7Cpageviews%%7Cpageimages&ppprop=disambiguation&pvipdays=30&piprop=thumbnail&pithumbsize=%d&exintro=true&explaintext=true&redirects=true&pageids=%d" \
 		% [IMAGE_FETCH_WIDTH, page_id]
-	if preview_request.request(url) != OK:
+	if preview_request.request(url, Global.WIKIPEDIA_HEADERS) != OK:
 		preview_info_label.text = "Couldn't reach Wikipedia."
 
 
@@ -341,7 +341,7 @@ func _on_preview_completed(result: int, response_code: int, _headers: PackedStri
 	preview_text.scroll_to_line(0)
 	var thumbnail_url = String(page.get("thumbnail", {}).get("source", ""))
 	if not thumbnail_url.is_empty():
-		image_request.request(thumbnail_url)
+		image_request.request(thumbnail_url, Global.WIKIPEDIA_HEADERS)
 
 	if preview_disambiguation:
 		preview_info_label.text = "Disambiguation page - pick one of the specific articles instead."

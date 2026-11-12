@@ -169,7 +169,7 @@ func request_article(page_id: int):
 		# ("Slovenian basketball player (born 1999)") and pageviews for the
 		# difficulty.
 		url = url.replace("prop=extracts", "prop=extracts%7Cdescription%7Cpageviews") + "&pvipdays=30"
-	$HTTPRequest.request(url)
+	$HTTPRequest.request(url, Global.WIKIPEDIA_HEADERS)
 	article_id = page_id
 
 func _on_request_completed(result, response_code, headers, body):
@@ -197,7 +197,7 @@ func _on_request_completed(result, response_code, headers, body):
 func request_article_hc():
 	# Step 1: Request a random ID from Wikipedia
 	var url = "https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*"
-	var error = $HTTPRequestHC.request(url)
+	var error = $HTTPRequestHC.request(url, Global.WIKIPEDIA_HEADERS)
 	
 	if error != OK:
 		print("Error starting Hardcore request")

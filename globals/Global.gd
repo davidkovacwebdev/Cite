@@ -199,6 +199,11 @@ enum HubLayout { AUTO, SINGLE_PLAYER, MULTIPLAYER }
 var last_player_count: int = -1
 var hub_layout_override: int = HubLayout.AUTO
 
+# Sent with every Wikipedia / Wikimedia request. Wikimedia's API policy asks
+# apps to identify themselves with a name and a way to reach the maintainer;
+# generic clients can get rate-limited or blocked.
+const WIKIPEDIA_HEADERS := ["User-Agent: Cite/1.0 (https://github.com/davidkovacwebdev/Cite; Steam app 4339350)"]
+
 # Developer tools (F12 on the hub, Legacy's test buttons). res://dev/ is left
 # out of every export preset, so shipped builds don't have it at all; the
 # debug-build check keeps it off even in an export that forgot the filter.

@@ -343,7 +343,7 @@ func _load_next_article() -> void:
 	answer_image.texture = null
 	article_id = int(candidates[index])
 	ArticleImage.prefetch(article_id)  # ready by the time the answer shows
-	var err := http.request(ARTICLE_URL % article_id)
+	var err := http.request(ARTICLE_URL % article_id, Global.WIKIPEDIA_HEADERS)
 	if err != OK:
 		_show_error("Couldn't reach Wikipedia.")
 
