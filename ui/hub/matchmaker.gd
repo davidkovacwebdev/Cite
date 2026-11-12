@@ -26,7 +26,7 @@ enum State { IDLE, SEARCHING, CREATING, WAITING, JOINING, FOUND, CONNECTING }
 const GAME_KEY := "game"
 const GAME_VALUE := "Cite-mm"
 const VERSION_KEY := "cite_version"
-const LOBBY_VERSION := "2"  # same as MultiplayerLobby.LOBBY_VERSION
+const LOBBY_VERSION := "3"  # same as MultiplayerLobby.LOBBY_VERSION
 const PLAYLIST_KEY := "playlist"
 const HASH_KEY := "playlist_hash"
 const STARTED_KEY := "game_started"

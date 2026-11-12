@@ -100,7 +100,7 @@ func _process(delta: float) -> void:
 	var color_rect = $Gradient
 	var health = Global.run.current_hp
 	# Clamp to [0, 1]
-	var t = clamp(health / 2000.0, 0.0, 1.0)
+	var t = clamp(health / float(Global.SINGLE_PLAYER_START_HP), 0.0, 1.0)
 	# Define colors
 	var low_color = Color("ff4b3c")   # near 0 HP
 	var high_color = Color("dcdcdc")  # near 2000 HP

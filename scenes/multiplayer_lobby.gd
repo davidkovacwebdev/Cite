@@ -18,7 +18,7 @@ const VERSION_LOBBY_KEY := "cite_version"
 # Bump whenever lobby/match messaging changes in a way older builds can't
 # handle - Find / Host a Game only lists lobbies with this exact value, so players
 # on different builds never end up in the same match.
-const LOBBY_VERSION := "2"
+const LOBBY_VERSION := "3"  # 3: multiplayer HP 4000
 const CONNECTION_TIMEOUT_SECONDS := 15.0
 const PASSWORD_CHECK_TIMEOUT_SECONDS := 10.0
 const BROWSER_REFRESH_SECONDS := 5.0
@@ -1331,10 +1331,10 @@ func _start_dummy_match() -> void:
 	Global.multiplayer_article_seed = randi()
 	Global.is_multiplayer_match = true
 	Global.is_dummy_opponent = true
-	Global.dummy_opponent_hp = 2000
-	Global.dummy_opponent_max_hp = 2000
-	Global.last_known_opponent_hp = 2000
-	Global.last_known_opponent_max_hp = 2000
+	Global.dummy_opponent_hp = Global.MULTIPLAYER_START_HP
+	Global.dummy_opponent_max_hp = Global.MULTIPLAYER_START_HP
+	Global.last_known_opponent_hp = Global.MULTIPLAYER_START_HP
+	Global.last_known_opponent_max_hp = Global.MULTIPLAYER_START_HP
 	Global.multiplayer_opponent_id = 0
 	Global.multiplayer_opponent_name = DummyOpponent.BOT_NAME
 	MultiplayerSync.chat_history.clear()

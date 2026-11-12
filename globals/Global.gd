@@ -19,8 +19,8 @@ var is_dummy_opponent: bool = false
 # DummyOpponent is a plain Node recreated fresh every round (the whole scene
 # reloads each round), so its accumulated damage has to live here instead of
 # on the node itself, or it'd silently reset to full HP every round.
-var dummy_opponent_hp: int = 2000
-var dummy_opponent_max_hp: int = 2000
+var dummy_opponent_hp: int = MULTIPLAYER_START_HP
+var dummy_opponent_max_hp: int = MULTIPLAYER_START_HP
 # Dev: how the bot plays (DummyOpponent) - picked in the hub's settings.
 enum DummyBotLevel { PASSIVE, NORMAL, FAST }
 var dummy_bot_level: int = DummyBotLevel.NORMAL
@@ -162,8 +162,8 @@ var multiplayer_ranked: bool = false
 # apply immediately on a fresh round (its HealthComponent/ManaComponent
 # otherwise reset to full in _ready() every round reload, flashing the wrong
 # value until the next real broadcast arrived).
-var last_known_opponent_hp: int = 2000
-var last_known_opponent_max_hp: int = 2000
+var last_known_opponent_hp: int = MULTIPLAYER_START_HP
+var last_known_opponent_max_hp: int = MULTIPLAYER_START_HP
 var last_known_opponent_mana: int = 100
 var last_known_opponent_max_mana: int = 100
 
@@ -198,6 +198,11 @@ const HUB_SP_FIRST_BELOW := 100
 enum HubLayout { AUTO, SINGLE_PLAYER, MULTIPLAYER }
 var last_player_count: int = -1
 var hub_layout_override: int = HubLayout.AUTO
+
+# Starting (and max) HP. Multiplayer matches start higher so a duel lasts
+# more articles; both players must run the same build (LOBBY_VERSION).
+const SINGLE_PLAYER_START_HP := 2000
+const MULTIPLAYER_START_HP := 4000
 
 # Sent with every Wikipedia / Wikimedia request. Wikimedia's API policy asks
 # apps to identify themselves with a name and a way to reach the maintainer;
@@ -507,16 +512,16 @@ func start_new_run():
 	run = Run.new()  # Just create a fresh Run instance
 	is_multiplayer_match = false
 	is_dummy_opponent = false
-	dummy_opponent_hp = 2000
-	dummy_opponent_max_hp = 2000
+	dummy_opponent_hp = MULTIPLAYER_START_HP
+	dummy_opponent_max_hp = MULTIPLAYER_START_HP
 	multiplayer_opponent_id = 0
 	multiplayer_opponent_name = ""
 	multiplayer_match_outcome = ""
 	multiplayer_match_over = false
 	multiplayer_ranked = false
 	MultiplayerSync.opponent_skip_round = -1
-	last_known_opponent_hp = 2000
-	last_known_opponent_max_hp = 2000
+	last_known_opponent_hp = MULTIPLAYER_START_HP
+	last_known_opponent_max_hp = MULTIPLAYER_START_HP
 	last_known_opponent_mana = 100
 	last_known_opponent_max_mana = 100
 	debug_forced_article_id = 0

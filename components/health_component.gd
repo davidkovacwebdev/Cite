@@ -32,14 +32,14 @@ func _ready() -> void:
 	_apply_skin()
 	set_deferred("trail_ready", true)
 	if is_display_only:
-		max_hp = 2000
+		max_hp = Global.MULTIPLAYER_START_HP  # opponent panel; real values arrive over the network
 		current_hp = max_hp
 		update_health_bar()
 		return
 
 	Global.run.Health = self
 	if Global.run.round_number == 1 and not Global.run.first_skipped:
-		var starting_hp = 2000
+		var starting_hp = Global.MULTIPLAYER_START_HP if Global.is_multiplayer_match else Global.SINGLE_PLAYER_START_HP
 		max_hp = starting_hp
 		current_hp = max_hp
 		Global.run.current_hp = starting_hp
