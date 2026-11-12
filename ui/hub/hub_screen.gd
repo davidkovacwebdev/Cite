@@ -15,6 +15,8 @@ extends Control
 const HUB_THEME := preload("res://ui/hub/hub_theme.tres")
 const HUB_SCENE := "res://ui/hub/hub.tscn"
 const LEADERBOARD_SCENE := "res://scenes/LeaderboardScreen.tscn"
+const PLAYLISTS_SCENE := "res://scenes/PlaylistsScreen.tscn"
+const PROFILE_SCENE := "res://scenes/ProfileScreen.tscn"
 const SETTINGS_PATH := "user://scene_data.tres"
 const ICON_DIR := "res://ui/icons/"
 const LOGO := "res://ui/hub/cite_logo_ink.png"
@@ -25,8 +27,6 @@ const RIGHT_COLUMN_WIDTH := 292
 const TOAST_SECONDS := 2.2
 const PLAYER_COUNT_REFRESH_SECONDS := 60.0
 const NOTIFICATIONS_WIDTH := 320
-# Shown until ranked exists (wins will raise it, losses lower it).
-const PLACEHOLDER_RATING := 1000
 
 # Notifications (dummy for now - there's no backend). Read/dismissed ids and
 # when each was first seen are kept in HUB_STATE_PATH. Delete that file to
@@ -185,9 +185,10 @@ func _profile_chip() -> Control:
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.custom_minimum_size.x = 110
 	who.add_child(name_label)
-	var rating := _label("Rating %s" % _thousands(PLACEHOLDER_RATING), "SmallMuted")
+	var rating := _label("", "SmallMuted")
 	rating.add_theme_font_size_override("font_size", 11)
 	who.add_child(rating)
+	_watch_rating(rating, "Rating %s")
 	row.add_child(who)
 	return chip
 
@@ -205,6 +206,28 @@ func _on_player_count(success: int, players: int) -> void:
 	players = maxi(players, 1)
 	online_label.text = "%s playing now" % _thousands(players)
 	online_row.visible = true
+
+
+# Labels showing the Ranked rating (format has one %s for the number, "" =
+# the status line instead: placement progress or W/L); they update when
+# Ratings loads the Steam copy or a match changes it.
+var rating_labels := {}  # Label -> format
+
+
+func _watch_rating(label: Label, format: String) -> void:
+	rating_labels[label] = format
+	if not Ratings.changed.is_connected(_refresh_ratings):
+		Ratings.changed.connect(_refresh_ratings)
+	_refresh_ratings()
+
+
+func _refresh_ratings() -> void:
+	for label in rating_labels.keys():
+		if is_instance_valid(label):
+			var format: String = rating_labels[label]
+			label.text = Ratings.status_text() if format.is_empty() else format % _thousands(Ratings.rating)
+		else:
+			rating_labels.erase(label)
 
 
 static func _thousands(n: int) -> String:
@@ -395,7 +418,7 @@ func _on_nav_play() -> void:
 
 
 func _on_nav_playlists() -> void:
-	_show_toast("Community playlists come next")
+	get_tree().change_scene_to_file(PLAYLISTS_SCENE)
 
 
 func _on_nav_leaderboards() -> void:
@@ -403,12 +426,35 @@ func _on_nav_leaderboards() -> void:
 
 
 func _on_nav_profile() -> void:
-	_show_toast("Profiles are coming soon")
+	get_tree().change_scene_to_file(PROFILE_SCENE)
+
+
+# Opens the lobby's host form with this playlist already picked.
+func _create_room_with(playlist_id: String) -> void:
+	Global.multiplayer_playlist_id = playlist_id
+	_open_lobby("host")
 
 
 func _open_lobby(entry: String) -> void:
 	Global.multiplayer_lobby_entry = entry
+	Global.lobby_return_scene = "" if scene_file_path == Global.MENU_SCENE else scene_file_path
 	get_tree().change_scene_to_file("res://scenes/MultiplayerLobby.tscn")
+
+
+# Starts Single Player Normal (playlist id, or null for every official one)
+# or Hardcore - same as Main's Normal/Hardcore, never Legacy.
+func _start_single_player(hardcore: bool, playlist) -> void:
+	Global.selected_categories = []
+	Global.selected_playsets = [] if playlist == null else [playlist]
+	if not hardcore:
+		SoundManagerScript.play_music_direct("res://assets/sounds/music/music.mp3")
+	Global.start_new_run()
+	Global.legacy_mode = false
+	if hardcore:
+		Global.run.current_game_mode = Global.run.GameMode.HARDCORE
+	else:
+		Global.run.current_game_mode = Global.run.GameMode.NORMAL
+	get_tree().change_scene_to_file("res://scenes/Round.tscn")
 
 
 # --- Small builders -----------------------------------------------------------
@@ -713,7 +759,8 @@ func _open_settings() -> void:
 	dev.add_theme_constant_override("separation", 4)
 	dev.alignment = BoxContainer.ALIGNMENT_CENTER
 	dev.add_child(_label("Dev:", "SmallMuted"))
-	for entry in [["Lobby Dummy", func(): _open_lobby("dummy")],
+	for entry in [["Dummy Ranked", func(): _dev_dummy_matchmaking("Ranked")],
+			["Dummy Quick Play", func(): _dev_dummy_matchmaking("Quick Play")],
 			["Test Article", func(): get_tree().change_scene_to_file("res://scenes/ArticleTester.tscn")],
 			["Test MP ID", func(): get_tree().change_scene_to_file("res://scenes/MultiplayerIdTester.tscn")],
 			["Reset Daily", _dev_reset_daily],
@@ -722,7 +769,46 @@ func _open_settings() -> void:
 		b.add_theme_font_size_override("font_size", 12)
 		dev.add_child(b)
 	box.add_child(dev)
+	# Dev: which mode takes the hub's top spot (normally decided by how many
+	# people are online - see hub.gd _wants_sp_first).
+	var layout_row := HBoxContainer.new()
+	layout_row.add_theme_constant_override("separation", 8)
+	layout_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	layout_row.add_child(_label("Dev: hub top", "SmallMuted"))
+	var layout := OptionButton.new()
+	layout.focus_mode = Control.FOCUS_NONE
+	layout.add_item("Auto (%d+ online = Ranked)" % Global.HUB_SP_FIRST_BELOW, Global.HubLayout.AUTO)
+	layout.add_item("Single Player", Global.HubLayout.SINGLE_PLAYER)
+	layout.add_item("Ranked", Global.HubLayout.MULTIPLAYER)
+	layout.select(layout.get_item_index(Global.hub_layout_override))
+	layout.item_selected.connect(func(i: int):
+		Global.hub_layout_override = layout.get_item_id(i)
+		if scene_file_path == Global.MENU_SCENE:
+			get_tree().reload_current_scene())
+	layout_row.add_child(layout)
+	box.add_child(layout_row)
+	# Dev: how the bot in Dummy Ranked / Quick Play plays.
+	var bot_row := HBoxContainer.new()
+	bot_row.add_theme_constant_override("separation", 8)
+	bot_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bot_row.add_child(_label("Dev: bot", "SmallMuted"))
+	var bot := OptionButton.new()
+	bot.focus_mode = Control.FOCUS_NONE
+	bot.add_item("Passive (never guesses)", Global.DummyBotLevel.PASSIVE)
+	bot.add_item("Normal", Global.DummyBotLevel.NORMAL)
+	bot.add_item("Fast", Global.DummyBotLevel.FAST)
+	bot.select(bot.get_item_index(Global.dummy_bot_level))
+	bot.item_selected.connect(func(i: int): Global.dummy_bot_level = bot.get_item_id(i))
+	bot_row.add_child(bot)
+	box.add_child(bot_row)
 	_add_modal_close(box)
+
+
+# Dev: the hub's matchmaking overlay (Ranked or Quick Play), but against
+# DummyOpponent with no Steam involved - see Matchmaker._run_dummy.
+func _dev_dummy_matchmaking(mode_label: String) -> void:
+	Global.pending_dummy_matchmaking = mode_label
+	get_tree().change_scene_to_file(HUB_SCENE)
 
 
 # Dev: fresh local set of 5 for today (no leaderboard - see DailyState.reset_day).

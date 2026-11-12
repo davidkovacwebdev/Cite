@@ -2,7 +2,8 @@ extends "res://ui/hub/hub_screen.gd"
 
 # Leaderboards tab of the hub (same top bar and "Redacted paper" theme as the
 # hub - see ui/hub/hub_screen.gd). Single Player has Normal (one board per
-# playlist) and Hardcore; Multiplayer isn't ranked yet. Rows show the
+# playlist) and Hardcore; Multiplayer is the Ranked Duels rating ladder
+# (Ratings.gd, board Leaderboards.RATING_NAME). Rows show the
 # player's Steam avatar, name and score, top Leaderboards.TOP_ENTRIES plus
 # the player's own entry pinned below if they're further down. The right
 # column shows the player's own standing and how the board is scored.
@@ -13,6 +14,8 @@ const NUMBER_WIDTH := 90
 const MEDALS := ["MedalGold", "MedalSilver", "MedalBronze"]
 
 var hardcore := false
+var ranked_board := false
+var sp_filters: HBoxContainer
 var playlist_picker: OptionButton
 var header_row: HBoxContainer
 var rows_box: VBoxContainer
@@ -68,11 +71,14 @@ func _build_table() -> Control:
 	board_title = _label("", "HeaderLarge")
 	titles.add_child(board_title)
 	head.add_child(titles)
-	head.add_child(_segmented(["Single Player", "Multiplayer"], 0, func(_i): pass, [1]))
+	head.add_child(_segmented(["Single Player", "Multiplayer"], 0, func(i):
+		ranked_board = i == 1
+		_load_board()))
 	box.add_child(head)
 
 	# Normal / Hardcore + playlist.
 	var filters := HBoxContainer.new()
+	sp_filters = filters
 	filters.add_theme_constant_override("separation", 10)
 	filters.add_child(_segmented(["Normal", "Hardcore"], 0, func(i):
 		hardcore = i == 1
@@ -81,8 +87,8 @@ func _build_table() -> Control:
 	playlist_picker.focus_mode = Control.FOCUS_NONE
 	playlist_picker.custom_minimum_size.x = 240
 	playlist_picker.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	for playlist in Global.all_playsets:
-		playlist_picker.add_item(str(playlist).capitalize())
+	for playlist in Global.get_official_playlist_ids():
+		playlist_picker.add_item(Global.get_playlist_display_name(playlist))
 		playlist_picker.set_item_metadata(playlist_picker.item_count - 1, playlist)
 	playlist_picker.item_selected.connect(func(_index):
 		SoundManagerScript.play_random_click("SFX")
@@ -141,6 +147,8 @@ func _build_side() -> Control:
 # --- Loading ------------------------------------------------------------------
 
 func _board_name() -> String:
+	if ranked_board:
+		return Leaderboards.RATING_NAME
 	if hardcore:
 		return Leaderboards.HARDCORE_NAME
 	if playlist_picker.selected < 0:
@@ -151,8 +159,9 @@ func _board_name() -> String:
 func _load_board() -> void:
 	load_serial += 1
 	var serial := load_serial
+	sp_filters.visible = not ranked_board
 	playlist_picker.visible = not hardcore
-	board_title.text = "Hardcore" if hardcore else "Normal"
+	board_title.text = "Ranked Duels" if ranked_board else ("Hardcore" if hardcore else "Normal")
 	_fill_rules()
 	_fill_header()
 	_clear_rows()
@@ -207,6 +216,10 @@ func _fill_header() -> void:
 		child.queue_free()
 	header_row.add_child(_cell("#", RANK_WIDTH, "ColumnHeader"))
 	header_row.add_child(_cell("PLAYER", 0, "ColumnHeader", true))
+	if ranked_board:
+		header_row.add_child(_cell("W - L", NUMBER_WIDTH, "ColumnHeader", false, HORIZONTAL_ALIGNMENT_RIGHT))
+		header_row.add_child(_cell("RATING", NUMBER_WIDTH, "ColumnHeader", false, HORIZONTAL_ALIGNMENT_RIGHT))
+		return
 	header_row.add_child(_cell("ARTICLES", NUMBER_WIDTH, "ColumnHeader", false, HORIZONTAL_ALIGNMENT_RIGHT))
 	if hardcore:
 		header_row.add_child(_cell("POINTS", NUMBER_WIDTH, "ColumnHeader", false, HORIZONTAL_ALIGNMENT_RIGHT))
@@ -215,6 +228,9 @@ func _fill_header() -> void:
 func _fill_you(entry: Dictionary) -> void:
 	for child in you_box.get_children().slice(2):
 		child.queue_free()
+	if ranked_board:
+		_fill_you_rating(entry)
+		return
 	if entry.is_empty():
 		var none := _label("No run on this board yet. Finish a run to get on it.", "MutedLabel")
 		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -234,9 +250,38 @@ func _fill_you(entry: Dictionary) -> void:
 	you_box.add_child(row)
 
 
+# The local copy (Ratings) is shown even before the first upload lands.
+func _fill_you_rating(entry: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	if not entry.is_empty():
+		row.add_child(_label("#%d" % int(entry.get("global_rank", 0)), "BigNumber"))
+	var stats := VBoxContainer.new()
+	stats.add_theme_constant_override("separation", 0)
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_child(_label("Rating %s" % _thousands(Ratings.rating), "StrongLabel"))
+	stats.add_child(_label(Ratings.status_text(), "MutedLabel"))
+	row.add_child(stats)
+	you_box.add_child(row)
+	if Ratings.games() == 0:
+		var none := _label("No ranked matches yet. Play Find Match on the Play tab to get on the ladder.", "MutedLabel")
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		you_box.add_child(none)
+
+
 func _fill_rules() -> void:
 	for child in rules_box.get_children().slice(2):
 		child.queue_free()
+	if ranked_board:
+		for line in ["Everyone starts at %d." % Ratings.START_RATING,
+				"Only Ranked matches (Find Match) count - Quick Play and rooms don't.",
+				"Beating a higher-rated player gains more, losing to a lower-rated one costs more.",
+				"Your first %d matches move your rating faster while it settles." % Ratings.PLACEMENT_MATCHES,
+				"Leaving or disconnecting counts as a loss."]:
+			var l := _label(line, "MutedLabel")
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			rules_box.add_child(l)
+		return
 	if hardcore:
 		var intro := _label("Points per correct guess, by how many people read the article on Wikipedia (daily views, last 30 days).", "MutedLabel")
 		intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -292,8 +337,14 @@ func _make_row(entry: Dictionary, is_own: bool) -> Control:
 	if is_own:
 		name_label.add_theme_font_size_override("font_size", 14)
 	row.add_child(name_label)
-	row.add_child(_cell("%d" % _articles(entry), NUMBER_WIDTH, "TableNumber", false, HORIZONTAL_ALIGNMENT_RIGHT))
-	if hardcore:
+	if ranked_board:
+		var details = entry.get("details", [])
+		var record := "%d - %d" % [int(details[0]) if details.size() > 0 else 0, int(details[1]) if details.size() > 1 else 0]
+		row.add_child(_cell(record, NUMBER_WIDTH, "TableNumber", false, HORIZONTAL_ALIGNMENT_RIGHT))
+		row.add_child(_cell(_thousands(int(entry.get("score", 0))), NUMBER_WIDTH, "TableNumber", false, HORIZONTAL_ALIGNMENT_RIGHT))
+	else:
+		row.add_child(_cell("%d" % _articles(entry), NUMBER_WIDTH, "TableNumber", false, HORIZONTAL_ALIGNMENT_RIGHT))
+	if hardcore and not ranked_board:
 		row.add_child(_cell("%d" % int(entry.get("score", 0)), NUMBER_WIDTH, "TableNumber", false, HORIZONTAL_ALIGNMENT_RIGHT))
 
 	if preview_result.is_empty():

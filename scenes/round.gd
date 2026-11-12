@@ -9,8 +9,17 @@ const DAMAGE_DEALT_COLOR := Color(0.45, 0.9, 0.5)
 const DAMAGE_TAKEN_COLOR := Color(0.95, 0.3, 0.3)
 # Mana bar height under the health bar in the single player match layout.
 const MANA_BAR_HEIGHT := 32.0
+# Answer picture (show_answer): largest size inside the answer box, and for
+# the picture-only card after a correct guess, which starts below the banner.
+const ANSWER_IMAGE_MAX := Vector2(420, 240)
+const ANSWER_IMAGE_ONLY_MAX := Vector2(380, 260)
+const ANSWER_IMAGE_ONLY_TOP := 240.0
+const ArticleImage := preload("res://components/article_image.gd")
 
 var current_id
+# Wikipedia page id whose lead image goes with the answer (ArticleImage) -
+# set in every mode, unlike current_id which Hardcore leaves alone.
+var image_id: int = 0
 var article_chunks
 var article_title
 var article_alternative_title
@@ -21,6 +30,9 @@ var article_difficulty
 # Hardcore only: the article's average daily Wikipedia views over the last
 # 30 days, -1 if Wikipedia didn't say. Sets its leaderboard points.
 var article_daily_views: float = -1.0
+# Wikipedia's short description with the title words blanked ("" if the
+# article has none) - Normal single player's description hint.
+var article_description: String = ""
 var article_censored_title
 var current_board
 var current_deck
@@ -101,10 +113,9 @@ func _process(delta: float) -> void:
 func censor_title():
 	var censored = ""
 	for c in article_title:
-		# Only plain a-z/A-Z/0-9 get blanked - everything else (spaces,
-		# punctuation, and accented/special letters like "á") shows through,
-		# matching get_title_count()'s definition of a "guessable" letter.
-		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9"):
+		# Letters/digits (accented ones included, e.g. "č") get blanked;
+		# spaces and punctuation show through - same rule as get_title_count().
+		if Global.is_guessable_char(c):
 			censored += "_"
 		else:
 			censored += c
@@ -173,7 +184,17 @@ func show_banner(text: String, color: Color = Color(0.75, 0.08, 0.08)) -> void:
 # guessed (or what the opponent typed when they got it - then `footer` holds
 # the real title). Fades in, holds, fades out within `duration` seconds -
 # built in code on its own CanvasLayer so it sits above everything.
+#
+# The article's Wikipedia image (ArticleImage) sits above the text when it
+# has one. With an empty title it's a picture-only card, placed below the
+# banner - correct guesses use that, since the title bar already shows the
+# answer and the banner the result.
 func show_answer(title: String, duration: float, caption_text: String = "The answer was", footer: String = "") -> void:
+	var image_only := title == ""
+	var image_id: int = Global.run.current_round.image_id
+	if image_only and ArticleImage.get_cached(image_id) == null:
+		return  # nothing to show (still loading or no image) - don't block the banner
+
 	var layer = CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
@@ -181,6 +202,8 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if image_only:
+		center.offset_top = ANSWER_IMAGE_ONLY_TOP  # clear of %BigBanner
 	layer.add_child(center)
 
 	var panel = PanelContainer.new()
@@ -204,6 +227,21 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
 	panel.add_child(vbox)
+
+	if image_only:
+		style.content_margin_left = 14
+		style.content_margin_right = 14
+		style.content_margin_top = 14
+		style.content_margin_bottom = 14
+		_add_answer_image(vbox, ArticleImage.get_cached(image_id), ANSWER_IMAGE_ONLY_MAX)
+
+	var tween = create_tween()
+	tween.tween_property(panel, "modulate:a", 1.0, 0.3)
+	tween.tween_interval(max(duration - 0.8, 0.0))
+	tween.tween_property(panel, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(layer.queue_free)
+	if image_only:
+		return
 
 	var caption = Label.new()
 	caption.text = caption_text
@@ -229,11 +267,34 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 		footer_label.add_theme_font_size_override("font_size", 18)
 		vbox.add_child(footer_label)
 
-	var tween = create_tween()
-	tween.tween_property(panel, "modulate:a", 1.0, 0.3)
-	tween.tween_interval(max(duration - 0.8, 0.0))
-	tween.tween_property(panel, "modulate:a", 0.0, 0.5)
-	tween.tween_callback(layer.queue_free)
+	_add_answer_image_when_ready(vbox, image_id)
+
+
+# Puts the image at the top of the answer box - right away if it's loaded,
+# otherwise as soon as it arrives (if the box is still up by then).
+func _add_answer_image_when_ready(vbox: VBoxContainer, image_id: int) -> void:
+	var tex: Texture2D = ArticleImage.get_cached(image_id)
+	if tex == null:
+		tex = await ArticleImage.fetch(image_id)
+	if tex != null and is_instance_valid(vbox) and vbox.is_inside_tree():
+		_add_answer_image(vbox, tex, ANSWER_IMAGE_MAX)
+
+
+func _add_answer_image(vbox: VBoxContainer, tex: Texture2D, max_size: Vector2) -> void:
+	var pic := TextureRect.new()
+	pic.texture = tex
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.custom_minimum_size = ArticleImage.fit_size(tex, max_size)
+	pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(pic)
+	vbox.move_child(pic, 0)
+	if vbox.get_child_count() > 1:
+		var gap := Control.new()
+		gap.custom_minimum_size.y = 8
+		vbox.add_child(gap)
+		vbox.move_child(gap, 1)
 
 
 # Big see-through text over the middle of the screen for a card effect

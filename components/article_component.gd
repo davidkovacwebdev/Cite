@@ -19,6 +19,8 @@ var SingleplayerBoardScene = preload("res://scenes/SingleplayerBoard.tscn")
 # Deck.generate_multiplayer_hand).
 const MP_STARTING_HAND_SIZE := 3
 
+const ArticleImage := preload("res://components/article_image.gd")
+
 var hc_article_id: int
 var hc_article_title
 
@@ -92,6 +94,18 @@ func load_article_data():
 	Global.run.cached_data = json.data
 	
 	Global.run.wikipedia_ids.clear()  # Clear previous IDs
+
+	# Single player Normal draws from one playlist picked in the hub (official
+	# or community), or all official ones; data.json above is still read for the hints'
+	# category/difficulty where it has the article. Legacy keeps data.json's
+	# playsets/categories.
+	if not Global.legacy_mode:
+		var playlist: String = Global.OFFICIAL_POOL
+		if Global.selected_playsets.size() == 1 and str(Global.selected_playsets[0]) in Global.get_available_playlist_ids():
+			playlist = str(Global.selected_playsets[0])
+		Global.run.wikipedia_ids.append_array(Global.get_playlist_article_ids(playlist))
+		Global.run.wikipedia_ids.shuffle()
+		return
 	
 	for article_obj in json.data:
 		var matches = false
@@ -150,6 +164,11 @@ func request_article(page_id: int):
 	if Global.run.current_game_mode == 1:
 		# Hardcore scores each guess by how obscure the article is.
 		url = url.replace("prop=extracts", "prop=extracts%7Cpageviews") + "&pvipdays=30"
+	elif Global.is_multiplayer_match or not Global.legacy_mode:
+		# Hints in Normal single player and multiplayer: the short description
+		# ("Slovenian basketball player (born 1999)") and pageviews for the
+		# difficulty.
+		url = url.replace("prop=extracts", "prop=extracts%7Cdescription%7Cpageviews") + "&pvipdays=30"
 	$HTTPRequest.request(url)
 	article_id = page_id
 
@@ -214,6 +233,7 @@ func parse_article_data(body) -> Dictionary:
 	return {
 		"title": strip_disambiguation(page_data["title"]),
 		"extract": page_data["extract"],
+		"description": str(page_data.get("description", "")),
 		"id": page_id,
 		"daily_views": average_daily_views(page_data.get("pageviews"))
 	}
@@ -245,6 +265,9 @@ func strip_disambiguation(title: String) -> String:
 
 func setup_article_round(article_data: Dictionary):
 	article_id = int(article_data["id"])
+	# Start fetching the answer picture now so it's ready when the round ends.
+	Global.run.current_round.image_id = article_id
+	ArticleImage.prefetch(article_id)
 	if Global.run.current_game_mode == 0:
 		article_title = article_data["title"]
 		article_extract = article_data["extract"]
@@ -262,6 +285,14 @@ func setup_article_round(article_data: Dictionary):
 			Global.run.current_round.article_main_category = ""
 			Global.run.current_round.article_related_categories = ""
 			Global.run.current_round.article_difficulty = 0
+		elif not Global.legacy_mode and not _in_cache(article_id):
+			# Playlist article data.json doesn't know: no alias, the playlist
+			# as its category, no difficulty (that hint hides itself).
+			article_alternative_title = article_title
+			Global.run.current_round.article_alternative_title = article_title
+			Global.run.current_round.article_main_category = Global.get_official_playlist_name_of(article_id)
+			Global.run.current_round.article_related_categories = ""
+			Global.run.current_round.article_difficulty = 0
 		else:
 			article_category = get_category_from_cache(article_id)
 			article_related_categories = get_related_category_from_cache(article_id)
@@ -274,6 +305,9 @@ func setup_article_round(article_data: Dictionary):
 
 		var censored_text = format_text(article_title, article_alternative_title, article_extract)
 		Global.run.current_round.article_chunks = split_sentences(censored_text)
+		var description: String = article_data.get("description", "")
+		Global.run.current_round.article_description = format_text(article_title, article_alternative_title, description, false) if description != "" else ""
+		Global.run.current_round.article_daily_views = article_data.get("daily_views", -1.0)
 
 		Global.run.current_round.censor_title()
 	elif Global.run.current_game_mode == 1:
@@ -288,6 +322,13 @@ func setup_article_round(article_data: Dictionary):
 		Global.run.current_round.article_difficulty = ""
 		Global.run.current_round.article_daily_views = article_data.get("daily_views", -1.0)
 		Global.run.current_round.censor_title()
+
+func _in_cache(target_id: int) -> bool:
+	for article_obj in Global.run.cached_data:
+		if int(article_obj.id) == target_id:
+			return true
+	return false
+
 
 func get_category_from_cache(target_id: int) -> String:
 	for article_obj in Global.run.cached_data:
@@ -364,7 +405,9 @@ func update_board_title():
 
 
 
-func format_text(article_title: String, article_alt_title: String, article_extract: String) -> String:
+# censor_parens: blank the opening "(pronunciation; alias)" parentheses -
+# off for the short description, whose "(born 1999)" is part of the hint.
+func format_text(article_title: String, article_alt_title: String, article_extract: String, censor_parens := true) -> String:
 	# Common words to exclude from censoring
 	var common_words = ["the", "a", "an", "in", "on", "at", "to", "for", "of", "and", "or", "but", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "must", "can", "with", "by", "from", "as", "it", "its", "it's", "that", "this", "these", "those", "he", "she", "they", "we", "i", "you", "me", "him", "her", "us", "them", "my", "your", "his", "her", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs"]
 	
@@ -395,7 +438,8 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 	# Process each word in the extract
 	var words = article_extract.split(" ")
 
-	censor_pronunciation_and_alias_parens(words)
+	if censor_parens:
+		censor_pronunciation_and_alias_parens(words)
 
 	for i in range(words.size()):
 		var original_word = words[i]

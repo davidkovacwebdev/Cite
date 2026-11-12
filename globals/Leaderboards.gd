@@ -13,6 +13,8 @@ const NORMAL_PREFIX := "sp_normal_"
 const HARDCORE_NAME := "sp_hardcore"
 # One board per Daily Challenge day and set ("daily_<number>_<set key>", see DailyState.todays_set).
 const DAILY_PREFIX := "daily_"
+# Ranked Duels rating (see Ratings.gd): score = rating, details = [wins, losses].
+const RATING_NAME := "mp_rating"
 const TOP_ENTRIES := 50
 const REPLY_TIMEOUT_MS := 10000
 
@@ -46,6 +48,15 @@ static func hardcore_points_for(daily_views: float) -> int:
 	return HARDCORE_TIERS[0]["points"]
 
 
+# "Well known" / "Known" / "Obscure" / "Deep cut" - also Normal single
+# player's difficulty hint.
+static func tier_label_for(daily_views: float) -> String:
+	for tier in HARDCORE_TIERS:
+		if daily_views >= tier["min_views"]:
+			return tier["label"]
+	return HARDCORE_TIERS[-1]["label"]
+
+
 static func daily_board_name(daily_number: int, set_key: String) -> String:
 	return DAILY_PREFIX + "%d_%s" % [daily_number, set_key]
 
@@ -57,6 +68,11 @@ static func daily_board_name(daily_number: int, set_key: String) -> String:
 # (it rate-limits uploads, so the Daily keeps them few).
 func submit_daily_progress(daily_number: int, set_key: String, points: int, details: PackedInt32Array) -> bool:
 	return await _upload(daily_board_name(daily_number, set_key), points, 0, details, false)
+
+
+# Overwrites (not keep-best): a rating can go down.
+func submit_rating(rating: int, wins: int, losses: int) -> bool:
+	return await _upload(RATING_NAME, rating, 0, PackedInt32Array([wins, losses]), false)
 
 
 # {"ok": Steam answered, "entry": the player's entry or {} if they have none}.

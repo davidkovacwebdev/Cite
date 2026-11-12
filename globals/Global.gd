@@ -21,6 +21,12 @@ var is_dummy_opponent: bool = false
 # on the node itself, or it'd silently reset to full HP every round.
 var dummy_opponent_hp: int = 2000
 var dummy_opponent_max_hp: int = 2000
+# Dev: how the bot plays (DummyOpponent) - picked in the hub's settings.
+enum DummyBotLevel { PASSIVE, NORMAL, FAST }
+var dummy_bot_level: int = DummyBotLevel.NORMAL
+# Dev: "Ranked" / "Quick Play" - the hub starts a fake matchmaking search
+# against the bot when it loads (hub_screen._dev_dummy_matchmaking).
+var pending_dummy_matchmaking: String = ""
 var multiplayer_opponent_id: int = 0
 var multiplayer_opponent_name: String = ""
 var multiplayer_article_seed: int = 0
@@ -31,7 +37,7 @@ var multiplayer_article_seed: int = 0
 # filename (minus extension) doubles as its ID - drop a new file in here to
 # add a playlist, no code changes needed.
 const MULTIPLAYER_PLAYLIST_FOLDER := "res://assets/data/multiplayer_playlists/"
-var multiplayer_playlist_id: String = "common_knowledge"
+var multiplayer_playlist_id: String = "geography"
 
 
 # Shared by MultiplayerLobby (real matches) and Main's dummy-lobby debug
@@ -86,6 +92,14 @@ func get_playlist_article_ids(playlist_id: String) -> Array:
 	return _read_playlist_ids(get_playlist_path(playlist_id))
 
 
+# Display name of the first official playlist holding this article ("" if none).
+func get_official_playlist_name_of(article_id: int) -> String:
+	for id in get_official_playlist_ids():
+		if article_id in _read_playlist_ids(get_playlist_path(id)):
+			return get_playlist_display_name(id)
+	return ""
+
+
 func _read_playlist_ids(path: String) -> Array:
 	var ids: Array = []
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -108,14 +122,21 @@ func get_playlist_path(playlist_id: String) -> String:
 	return MULTIPLAYER_PLAYLIST_FOLDER + playlist_id + ".json"
 
 
-# Built-ins are named after their file (common_knowledge -> "Common
-# Knowledge"), community ones by their Workshop title.
+# Built-ins are named after their file (world_history -> "World
+# History"), community ones by their Workshop title.
+# Official playlists whose name from the filename ("tv_celebrities" ->
+# "Tv Celebrities") comes out wrong.
+const OFFICIAL_DISPLAY_NAMES := {"tv_celebrities": "TV Celebrities"}
+
+
 func get_playlist_display_name(playlist_id: String) -> String:
 	if playlist_id == OFFICIAL_POOL:
-		return "All official playlists"
+		return "All official playlists (Ranked selection)"
 	if Workshop.is_community_id(playlist_id):
 		var title = Workshop.get_title(Workshop.file_id_of(playlist_id))
 		return (title if not title.is_empty() else "Community playlist") + " (Community)"
+	if OFFICIAL_DISPLAY_NAMES.has(playlist_id):
+		return OFFICIAL_DISPLAY_NAMES[playlist_id]
 	return playlist_id.replace("_", " ").capitalize()
 
 
@@ -134,6 +155,8 @@ func get_playlist_hash(playlist_id: String) -> String:
 	return FileAccess.get_md5(path)
 var multiplayer_match_outcome: String = ""  # "won" or "lost", set once the match ends
 var multiplayer_match_over: bool = false
+# Matchmaking's Ranked mode - the only matches that change the rating (Ratings.gd).
+var multiplayer_ranked: bool = false
 
 # Last vitals we actually heard from the opponent, kept for OpponentPanel to
 # apply immediately on a fresh round (its HealthComponent/ManaComponent
@@ -159,8 +182,22 @@ var multiplayer_lobby_entry: String = "browse"
 # Set when leaving MultiplayerLobby with Back, so Main reopens on its
 # Multiplayer submenu instead of the top-level menu.
 var return_to_multiplayer_menu: bool = false
+# Hub-style screen that opened the lobby (e.g. Playlists) - the lobby's Back
+# returns there instead of the hub. "" = the hub.
+var lobby_return_scene: String = ""
 # Same for the Leaderboards screen and the Game submenu.
 var return_to_game_menu: bool = false
+# Hub's "Legacy" link / the end of a Legacy run: Main.tscn opens straight on
+# the old Normal/Hardcore screen, in its original blue look.
+var open_legacy_menu: bool = false
+# Hub: Single Player takes the top spot while fewer than
+# HUB_SP_FIRST_BELOW people are playing (matchmaking would mostly wait).
+# Last count Steam reported (-1 = unknown) so the hub opens straight on the
+# right layout, and a dev override from the hub settings (session only).
+const HUB_SP_FIRST_BELOW := 100
+enum HubLayout { AUTO, SINGLE_PLAYER, MULTIPLAYER }
+var last_player_count: int = -1
+var hub_layout_override: int = HubLayout.AUTO
 # Room code typed into the hub's Private Match card (lobby entry "join").
 var pending_lobby_code: String = ""
 # Where "back to the menu" goes: the new hub (Main.tscn is kept, unused).
@@ -199,6 +236,7 @@ func end_multiplayer_match(my_outcome: String) -> void:
 		return
 	multiplayer_match_over = true
 	multiplayer_match_outcome = my_outcome
+	Ratings.finish_match(my_outcome)
 	var opponent_outcome = "won" if my_outcome == "lost" else "lost"
 	MultiplayerSync.send_match_over(opponent_outcome)
 	leave_multiplayer_lobby()
@@ -210,6 +248,9 @@ func leave_multiplayer_lobby() -> void:
 		multiplayer_lobby_id = 0
 
 func _ready():
+	# Steam callbacks (run in _process) must keep coming while a dropped
+	# multiplayer connection pauses the tree - see MultiplayerSync.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Default behavior quits immediately on the window's close button, before
 	# _notification below gets a chance to tell the opponent we're leaving.
 	get_tree().set_auto_accept_quit(false)
@@ -233,6 +274,8 @@ func _ready():
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.is_echo() and event.keycode == KEY_ESCAPE):
 		return
+	if get_tree().paused:
+		return  # a dropped multiplayer connection is pausing the match (MultiplayerSync)
 	for button in get_tree().get_nodes_in_group("back_button"):
 		if button is BaseButton and button.is_visible_in_tree() and not button.disabled:
 			get_viewport().set_input_as_handled()
@@ -256,6 +299,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST:
 		return
 	if is_multiplayer_match and not multiplayer_match_over:
+		Ratings.finish_match("lost")  # leaving a ranked match is a loss
 		MultiplayerSync.send_player_left()
 		await get_tree().create_timer(0.3).timeout
 	get_tree().quit()
@@ -372,25 +416,61 @@ func similarity_ratio(a: String, b: String) -> float:
 	return 1.0 - float(distance) / float(max_len)
 
 
-# Maps accented Latin characters to their unaccented equivalent (expects
-# already-lowercased input) - used both for guess matching and for the
+# Maps accented Latin characters to their unaccented equivalent - used
+# for guess matching and for the
 # title-censoring word comparison in article_component.gd, so "Sánchez" and
 # "Sanchez" are treated as the same word regardless of which form Wikipedia's
 # API happens to return.
+# Covers Central/Eastern European letters too (č, ć, š, ž, đ, ł, ő...), so
+# e.g. "Luka Dončić" matches a typed "luka doncic". Uppercase forms map to
+# uppercase so callers that haven't lowercased yet still work.
+const _ACCENT_MAP := {
+		"á": "a", "Á": "A", "à": "a", "À": "A", "â": "a", "Â": "A", "ä": "a",
+		"Ä": "A", "ã": "a", "Ã": "A", "å": "a", "Å": "A", "ā": "a", "Ā": "A",
+		"ă": "a", "Ă": "A", "ą": "a", "Ą": "A", "ǎ": "a", "Ǎ": "A", "ç": "c",
+		"Ç": "C", "ć": "c", "Ć": "C", "ĉ": "c", "Ĉ": "C", "ċ": "c", "Ċ": "C",
+		"č": "c", "Č": "C", "ď": "d", "Ď": "D", "đ": "d", "Đ": "D", "é": "e",
+		"É": "E", "è": "e", "È": "E", "ê": "e", "Ê": "E", "ë": "e", "Ë": "E",
+		"ē": "e", "Ē": "E", "ĕ": "e", "Ĕ": "E", "ė": "e", "Ė": "E", "ę": "e",
+		"Ę": "E", "ě": "e", "Ě": "E", "ĝ": "g", "Ĝ": "G", "ğ": "g", "Ğ": "G",
+		"ġ": "g", "Ġ": "G", "ģ": "g", "Ģ": "G", "ĥ": "h", "Ĥ": "H", "ħ": "h",
+		"Ħ": "H", "í": "i", "Í": "I", "ì": "i", "Ì": "I", "î": "i", "Î": "I",
+		"ï": "i", "Ï": "I", "ĩ": "i", "Ĩ": "I", "ī": "i", "Ī": "I", "ĭ": "i",
+		"Ĭ": "I", "į": "i", "Į": "I", "ı": "i", "ǐ": "i", "Ǐ": "I",
+		"ĵ": "j", "Ĵ": "J", "ķ": "k", "Ķ": "K", "ĺ": "l", "Ĺ": "L", "ļ": "l",
+		"Ļ": "L", "ľ": "l", "Ľ": "L", "ŀ": "l", "Ŀ": "L", "ł": "l", "Ł": "L",
+		"ñ": "n", "Ñ": "N", "ń": "n", "Ń": "N", "ņ": "n", "Ņ": "N", "ň": "n",
+		"Ň": "N", "ŉ": "n", "ó": "o", "Ó": "O", "ò": "o", "Ò": "O", "ô": "o",
+		"Ô": "O", "ö": "o", "Ö": "O", "õ": "o", "Õ": "O", "ø": "o", "Ø": "O",
+		"ō": "o", "Ō": "O", "ŏ": "o", "Ŏ": "O", "ő": "o", "Ő": "O", "ǒ": "o",
+		"Ǒ": "O", "ŕ": "r", "Ŕ": "R", "ŗ": "r", "Ŗ": "R", "ř": "r", "Ř": "R",
+		"ś": "s", "Ś": "S", "ŝ": "s", "Ŝ": "S", "ş": "s", "Ş": "S", "š": "s",
+		"Š": "S", "ș": "s", "Ș": "S", "ţ": "t", "Ţ": "T", "ť": "t", "Ť": "T",
+		"ŧ": "t", "Ŧ": "T", "ț": "t", "Ț": "T", "ú": "u", "Ú": "U", "ù": "u",
+		"Ù": "U", "û": "u", "Û": "U", "ü": "u", "Ü": "U", "ũ": "u", "Ũ": "U",
+		"ū": "u", "Ū": "U", "ŭ": "u", "Ŭ": "U", "ů": "u", "Ů": "U", "ű": "u",
+		"Ű": "U", "ų": "u", "Ų": "U", "ǔ": "u", "Ǔ": "U", "ŵ": "w", "Ŵ": "W",
+		"ý": "y", "Ý": "Y", "ÿ": "y", "Ÿ": "Y", "ŷ": "y", "Ŷ": "Y", "ź": "z",
+		"Ź": "Z", "ż": "z", "Ż": "Z", "ž": "z", "Ž": "Z",
+		"ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE", "þ": "th", "ð": "d", "Ð": "D",
+}
+
+
 func strip_accents(text: String) -> String:
-	var replacements = {
-		"á": "a", "à": "a", "â": "a", "ä": "a", "ã": "a", "å": "a",
-		"é": "e", "è": "e", "ê": "e", "ë": "e",
-		"í": "i", "ì": "i", "î": "i", "ï": "i",
-		"ó": "o", "ò": "o", "ô": "o", "ö": "o", "õ": "o",
-		"ú": "u", "ù": "u", "û": "u", "ü": "u",
-		"ñ": "n", "ç": "c",
-		"ý": "y", "ÿ": "y"
-	}
-	var result = text
-	for accented in replacements:
-		result = result.replace(accented, replacements[accented])
+	var result := ""
+	for c in text:
+		result += _ACCENT_MAP.get(c, c)
 	return result
+
+
+# A title character that gets blanked (and must be guessed): a-z, A-Z, 0-9,
+# plus any accented Latin letter that strip_accents() folds to one of those.
+func is_guessable_char(c: String) -> bool:
+	var s := strip_accents(c)
+	if s.is_empty():
+		return false
+	var f := s[0]
+	return (f >= "a" and f <= "z") or (f >= "A" and f <= "Z") or (f >= "0" and f <= "9")
 
 
 # Used to accept/reject a player's title guess: a flat 85% similarity ratio
@@ -419,6 +499,8 @@ func start_new_run():
 	multiplayer_opponent_name = ""
 	multiplayer_match_outcome = ""
 	multiplayer_match_over = false
+	multiplayer_ranked = false
+	MultiplayerSync.opponent_skip_round = -1
 	last_known_opponent_hp = 2000
 	last_known_opponent_max_hp = 2000
 	last_known_opponent_mana = 100

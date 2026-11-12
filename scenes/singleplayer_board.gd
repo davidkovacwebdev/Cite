@@ -16,6 +16,8 @@ const CORRECT_GUESS_HEAL := 50
 # Category / difficulty reveal cost, same as Legacy's CategoryReveal and
 # DifficultyReveal.
 const HELP_MANA_COST := 10
+# Wikipedia's short description says more than data.json's category did.
+const DESCRIPTION_MANA_COST := 20
 
 var chunks
 var shake_tween: Tween
@@ -24,6 +26,10 @@ var guess_open: bool = false
 var guess_checking: bool = false
 var _base_chunk_font_size: int
 var _base_title_font_size: int
+
+
+# Sentence indexes shown so far this article, for PlayerStats' fastest guess.
+var revealed_chunks := {}
 
 
 func _ready() -> void:
@@ -56,6 +62,7 @@ func _ready() -> void:
 
 
 func reveal_chunk(index: int, chunk: String):
+	revealed_chunks[index] = true
 	index -= 1
 	var scroll = $ScrollContainer
 	var vbox = $ScrollContainer/VBoxContainer
@@ -153,11 +160,14 @@ func _input(event):
 	if not is_inside_tree():
 		return
 	Global.run.number_of_wrong_guesses += 1
+	PlayerStats.record_wrong()
 	close_guess()
 	Global.run.Health.damage(WRONG_GUESS_DAMAGE)
 
 
 func correct_guess():
+	if not is_inside_tree():  # run already ended (e.g. died to a card's HP cost)
+		return
 	if round_advancing:
 		return
 	round_advancing = true
@@ -168,13 +178,20 @@ func correct_guess():
 	Global.run.current_round.card_playable = false
 	Global.run.Health.heal(CORRECT_GUESS_HEAL)
 	var points = Leaderboards.record_correct_guess()
+	var current = Global.run.current_round
+	var hardcore: bool = Global.run.current_game_mode == Global.run.GameMode.HARDCORE
+	PlayerStats.record_correct(current.image_id, current.article_title, revealed_chunks.size(),
+		chunks.size() if chunks else 0, current.article_daily_views if hardcore else -1.0)
 
 	$ArticleTitle.text = Global.run.current_round.article_title
 	var banner = "Correct!"
 	if Global.run.current_game_mode == Global.run.GameMode.HARDCORE:
 		banner += " +%d" % points
 	get_parent().show_banner(banner, CORRECT_COLOR)
+	get_parent().show_answer("", 2.0)  # the article's picture, if it has one
 	await get_tree().create_timer(2).timeout
+	if not is_inside_tree():  # left the match during the pause
+		return
 	Global.run.current_round.card_playable = true
 
 	_advance_round()
@@ -216,13 +233,28 @@ func _setup_helps() -> void:
 		%HardcoreNote.visible = true
 		return
 	%CategoryButton.pressed.connect(_on_category_pressed)
+	# Wikipedia's short description replaces the category; articles without
+	# one fall back to the old category hint.
+	if Global.run.current_round.article_description != "":
+		%CategoryButton.text = "Reveal description (%d mana)" % DESCRIPTION_MANA_COST
 	%DifficultyButton.pressed.connect(_on_difficulty_pressed)
+	# Difficulty comes from Wikipedia pageviews (same tiers as Hardcore), so
+	# every article has one; data.json's number only if the views didn't load.
+	if Global.run.current_round.article_daily_views < 0 and not Global.run.current_round.article_difficulty:
+		%DifficultyButton.visible = false
 
 
 func _on_category_pressed() -> void:
+	var round_data = Global.run.current_round
+	if round_data.article_description != "":
+		if not _pay_for_help(DESCRIPTION_MANA_COST):
+			return
+		%CategoryButton.visible = false
+		%CategoryResult.text = round_data.article_description
+		%CategoryResult.visible = true
+		return
 	if not _pay_for_help():
 		return
-	var round_data = Global.run.current_round
 	var related = round_data.article_related_categories
 	if related is Array:
 		related = ", ".join(related)
@@ -238,15 +270,19 @@ func _on_difficulty_pressed() -> void:
 	if not _pay_for_help():
 		return
 	%DifficultyButton.visible = false
-	%DifficultyResult.text = "Difficulty: " + str(Global.run.current_round.article_difficulty)
+	var views: float = Global.run.current_round.article_daily_views
+	if views >= 0:
+		%DifficultyResult.text = "Difficulty: %s (~%d views/day)" % [Leaderboards.tier_label_for(views), roundi(views)]
+	else:
+		%DifficultyResult.text = "Difficulty: " + str(Global.run.current_round.article_difficulty)
 	%DifficultyResult.visible = true
 
 
-func _pay_for_help() -> bool:
-	if Global.run.current_mana < HELP_MANA_COST:
+func _pay_for_help(cost: int = HELP_MANA_COST) -> bool:
+	if Global.run.current_mana < cost:
 		return false
 	SoundManagerScript.play_random_click("SFX")
-	Global.run.Mana.spend_mana(HELP_MANA_COST)
+	Global.run.Mana.spend_mana(cost)
 	return true
 
 
@@ -276,7 +312,7 @@ func get_title_count(text: String) -> int:
 	var count = 0
 	for c in text:
 		# Includes A-Z, a-z, and 0-9
-		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9"):
+		if Global.is_guessable_char(c):
 			count += 1
 	return count
 

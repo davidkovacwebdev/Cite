@@ -18,6 +18,8 @@ const DailyState := preload("res://ui/daily/daily_state.gd")
 const ARTICLE_URL := "https://en.wikipedia.org/w/api.php?action=query&prop=extracts%%7Credirects&rdlimit=max&rdnamespace=0&pageids=%d&explaintext=true&exintro=true&format=json&origin=*"
 const VARIANT_SIMILARITY := 0.6  # how close a redirect must be to the title to count as a spelling of it
 const MIN_CHUNKS := 4  # intros with fewer sentences are skipped (too little to reveal)
+const ArticleImage := preload("res://components/article_image.gd")
+const ANSWER_IMAGE_MAX := Vector2(420, 200)
 const MAX_CHUNKS := 10  # only the intro's first sentences are used (~1.5 min per article max)
 const HIDDEN_ALPHA := 0.35  # hidden sentences: faint underscores, so revealed text stands out
 const GRACE_SECONDS := 10.0  # after the last sentence, then the article is lost
@@ -66,6 +68,7 @@ var letters_label: Label
 var timer_bar: ProgressBar
 var text_label: RichTextLabel
 var feedback_label: Label
+var answer_image: TextureRect  # the article's Wikipedia picture, shown with the answer
 var bottom_row: HBoxContainer
 var guess_input: LineEdit
 var guess_button: Button
@@ -258,6 +261,14 @@ func _build(column: VBoxContainer) -> void:
 	text_label.add_theme_constant_override("line_separation", 4)
 	panel_box.add_child(text_label)
 
+	answer_image = TextureRect.new()
+	answer_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	answer_image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	answer_image.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	answer_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	answer_image.visible = false
+	panel_box.add_child(answer_image)
+
 	feedback_label = _label("", "StrongLabel")
 	feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	feedback_label.custom_minimum_size.y = 24
@@ -328,7 +339,10 @@ func _load_next_article() -> void:
 	text_label.text = ""
 	feedback_label.text = ""
 	_set_guessing(false)
+	answer_image.visible = false
+	answer_image.texture = null
 	article_id = int(candidates[index])
+	ArticleImage.prefetch(article_id)  # ready by the time the answer shows
 	var err := http.request(ARTICLE_URL % article_id)
 	if err != OK:
 		_show_error("Couldn't reach Wikipedia.")
@@ -497,7 +511,7 @@ func _letter_count() -> int:
 
 
 static func _is_letter(c: String) -> bool:
-	return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9")
+	return Global.is_guessable_char(c)
 
 
 # --- Guessing -----------------------------------------------------------------
@@ -558,6 +572,7 @@ func _submit_guess() -> void:
 		_finish_article(true)
 		return
 	wrong += 1
+	PlayerStats.record_wrong()
 	guess_locked = true
 	feedback_label.text = "Not quite  ·  -%d" % DailyState.WRONG_GUESS_PENALTY
 	feedback_label.add_theme_color_override("font_color", get_theme_color("accent", "Hub"))
@@ -575,6 +590,8 @@ func _on_give_up() -> void:
 func _finish_article(solved: bool) -> void:
 	var points := DailyState.points_for(solved, revealed, chunks.size(), wrong)
 	state["results"].append({"id": article_id, "title": title, "solved": solved, "points": points, "wrong": wrong})
+	if solved:
+		PlayerStats.record_correct(article_id, title, revealed, chunks.size())
 	state["started_id"] = 0
 	DailyState.save_day(daily_number, state)
 	if DailyState.is_finished(state):
@@ -597,6 +614,17 @@ func _finish_article(solved: bool) -> void:
 	_set_guessing(false)
 	next_button.grab_focus()
 	_refresh_header()
+	_show_answer_image(article_id)
+
+
+func _show_answer_image(id: int) -> void:
+	var tex: Texture2D = await ArticleImage.fetch(id)
+	# Still on this article's answer? (Next may have been pressed meanwhile.)
+	if tex == null or not is_inside_tree() or phase != Phase.ANSWER or article_id != id:
+		return
+	answer_image.texture = tex
+	answer_image.custom_minimum_size = ArticleImage.fit_size(tex, ANSWER_IMAGE_MAX)
+	answer_image.visible = true
 
 
 func _next_article() -> void:

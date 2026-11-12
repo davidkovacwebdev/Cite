@@ -104,6 +104,8 @@ func _input(event):
 			Global.run.number_of_wrong_guesses += 1
 
 func correct_guess():
+	if not is_inside_tree():  # run already ended (e.g. died to a card's HP cost)
+		return
 	if round_advancing:
 		return
 	round_advancing = true
@@ -118,6 +120,8 @@ func correct_guess():
 	$ArticleTitle.text = Global.run.current_round.article_title
 	$InputField.success_border()
 	await get_tree().create_timer(2).timeout
+	if not is_inside_tree():  # left the match during the pause
+		return
 	Global.run.current_round.card_playable = true
 
 	_advance_round()
@@ -147,7 +151,7 @@ func get_title_count(text: String) -> int:
 	var count = 0
 	for c in text:
 		# Includes A-Z, a-z, and 0-9
-		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9"):
+		if Global.is_guessable_char(c):
 			count += 1
 	return count
 	

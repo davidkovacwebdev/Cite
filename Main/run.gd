@@ -63,6 +63,9 @@ var legacy_mana_restore:int
 var hand_size:int = 3
 
 var double_down_armed: bool = false
+# Round number Double Down was last played in (multiplayer): it doesn't stack,
+# so further copies can't be played until the next round.
+var double_down_round: int = -1
 var letter_reveal_armed: bool = false
 
 # Multiplayer hand, as Card.Action_sub_type values, carried across rounds
@@ -73,6 +76,15 @@ var letter_reveal_armed: bool = false
 # it's played.
 var mp_hand: Array = []
 var mp_hand_dealt: bool = false
+
+# Multiplayer: how each article went, for the end screen. One entry per
+# article: {"title", "result": "you" / "opponent" / "skipped" / "timeout",
+# "damage": damage the guesser dealt, or what each player took on a draw}.
+var mp_log: Array = []
+
+
+func log_article(result: String, damage: int) -> void:
+	mp_log.append({"title": current_round.article_title, "result": result, "damage": damage})
 
 
 

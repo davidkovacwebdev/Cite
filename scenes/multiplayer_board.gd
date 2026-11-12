@@ -14,6 +14,10 @@ const TITLE_LETTER_EVERY_N_CHUNKS := 2
 const ANSWER_DISPLAY_SECONDS := 4.0
 # HP both players lose on a drawn round, times the round number.
 const DRAW_DAMAGE_PER_ROUND := 100
+# "Skip article": once both players vote, the round ends like a draw (same
+# damage). Voting opens a moment after the round starts so nobody skips on
+# reflex before reading anything.
+const SKIP_VOTE_DELAY_SECONDS := 3.0
 const REWARD_PICK_TIMEOUT_SECONDS := 5.0
 const REWARD_TIMER_BAR_WIDTH := 420.0
 const REWARD_TIMER_BAR_HEIGHT := 14.0
@@ -94,6 +98,9 @@ var _pending_reward_picker_info: Array = []
 var _pending_reward_picker_ready: bool = false
 var _pending_card_reward_winner_action: int = -1
 var _pending_card_reward_ready: bool = false
+var skip_voted: bool = false
+var skip_button: Button
+var skip_status: Label
 
 
 # Called when the node enters the scene tree for the first time.
@@ -116,7 +123,13 @@ func _ready() -> void:
 	MultiplayerSync.reward_picker_started.connect(_on_reward_picker_started_signal)
 	MultiplayerSync.reward_none.connect(_on_reward_none_signal)
 	MultiplayerSync.chat_message_added.connect(_add_chat_line)
-	%ChatInput.text_submitted.connect(_on_chat_submitted)
+	MultiplayerSync.opponent_skip_voted.connect(_on_opponent_skip_voted)
+	_build_skip_vote()
+	# Enter/T/Esc for the chat are handled in _input (Enter always ends up in
+	# the guess field); the placeholder doubles as the key hint.
+	%ChatInput.focus_entered.connect(_update_chat_hint)
+	%ChatInput.focus_exited.connect(_update_chat_hint)
+	_update_chat_hint()
 	# This board is rebuilt every round - replay the match's chat so far.
 	for entry in MultiplayerSync.chat_history:
 		_add_chat_line(entry.name, entry.text, entry.own)
@@ -144,6 +157,7 @@ func _ready() -> void:
 	if Global.run.current_round.article_chunks:
 		chunks = Global.run.current_round.article_chunks
 	update_board_chunks()
+	_build_round_hints()
 	_base_chunk_font_size = $ScrollContainer.get_theme_font_size("normal_font_size", "RichTextLabel")
 	_base_title_font_size = $ArticleTitle.get_theme_font_size("normal_font_size")
 	apply_text_size()
@@ -180,7 +194,7 @@ func _start_countdown() -> void:
 			return  # opponent left/match ended in the first couple seconds of the round
 		$CountdownLabel.text = n
 		SoundManagerScript.play_sfx_overlapping(COUNTDOWN_TICK_SOUND, 0.0, COUNTDOWN_TICK_PITCH_VARIATION)
-		await get_tree().create_timer(1.0).timeout
+		await get_tree().create_timer(1.0, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 	$CountdownLabel.visible = false
@@ -188,6 +202,9 @@ func _start_countdown() -> void:
 	Global.run.current_round.card_playable = true
 	$RevealTimerBar.visible = true
 	_schedule_next_reveal()
+	await get_tree().create_timer(SKIP_VOTE_DELAY_SECONDS, false).timeout
+	if is_inside_tree() and not round_advancing and not skip_voted:
+		skip_button.disabled = false
 
 
 # First 3 reveals every 6s, next 3 every 9s, the rest every 12s.
@@ -235,6 +252,7 @@ func _on_reveal_timer_timeout() -> void:
 	var chunk_index = reveal_order[reveal_index]
 	reveal_chunk(chunk_index + 1, chunks[chunk_index])
 	reveal_index += 1
+	_update_round_hints()
 	_maybe_reveal_title_letter()
 	_schedule_next_reveal()
 
@@ -287,24 +305,108 @@ func _start_grace_period() -> void:
 
 
 func _on_grace_period_expired() -> void:
+	_end_round_as_draw()
+
+
+# Nobody got it (timer ran out, or both players voted to skip) - show the
+# answer, cost both players the draw damage, move on.
+func _end_round_as_draw(caption: String = "The answer was") -> void:
 	if round_advancing or Global.multiplayer_match_over or not is_inside_tree():
 		return
 	round_advancing = true
+	reveal_timer.stop()
+	_stop_timer_charge()
+	in_grace_period = false
 	close_guess()
-	# Nobody got it - show the answer, in the title bar and as the banner.
+	skip_button.disabled = true
+	Global.run.current_round.card_playable = false
+	# Show the answer, in the title bar and as the banner.
 	var title: String = Global.run.current_round.article_title
 	Global.run.current_round.article_censored_title = title
 	update_board_title()
-	get_parent().show_answer(title, ANSWER_DISPLAY_SECONDS)
+	get_parent().show_answer(title, ANSWER_DISPLAY_SECONDS, caption)
+	Global.run.log_article("timeout" if caption == "The answer was" else "skipped", _skip_damage())
 	# Each client damages only itself; the opponent sees it via vitals sync.
 	# Lethal damage ends the match right here (HealthComponent.die()).
-	Global.run.Health.damage(DRAW_DAMAGE_PER_ROUND * Global.run.round_number)
+	if Global.is_dummy_opponent:
+		MultiplayerSync.dummy_damage_taken.emit(_skip_damage())  # the bot has no client of its own
+	Global.run.Health.damage(_skip_damage())
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
-	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS).timeout
+	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
+	Global.run.current_round.card_playable = true
 	_advance_round()
+
+
+# Small "Skip article" button under the opponent's panel, with the vote
+# state underneath it.
+func _build_skip_vote() -> void:
+	var box := VBoxContainer.new()
+	box.position = Vector2(952, 124)
+	box.size = Vector2(188, 0)
+	box.add_theme_constant_override("separation", 4)
+	add_child(box)
+	skip_button = Button.new()
+	skip_button.theme_type_variation = &"SmallButton"
+	skip_button.text = "Skip article"
+	skip_button.focus_mode = Control.FOCUS_NONE
+	skip_button.disabled = true
+	skip_button.tooltip_text = "If both players vote, the article is skipped and both take %d damage." % _skip_damage()
+	skip_button.pressed.connect(_on_skip_pressed)
+	box.add_child(skip_button)
+	skip_status = Label.new()
+	skip_status.theme_type_variation = &"SmallMuted"
+	skip_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(skip_status)
+	_update_skip_status()
+
+
+func _skip_damage() -> int:
+	return DRAW_DAMAGE_PER_ROUND * Global.run.round_number
+
+
+func _opponent_skip_voted() -> bool:
+	return MultiplayerSync.opponent_skip_round == Global.run.round_number
+
+
+func _on_skip_pressed() -> void:
+	if skip_voted or round_advancing or not round_started:
+		return
+	skip_voted = true
+	skip_button.disabled = true
+	MultiplayerSync.send_skip_vote(Global.run.round_number)
+	_update_skip_status()
+	_check_skip_vote()
+
+
+func _on_opponent_skip_voted(round_number: int) -> void:
+	if round_number != Global.run.round_number or not is_inside_tree():
+		return
+	if not skip_voted and not round_advancing:
+		SoundManagerScript.play_sfx_overlapping(COUNTDOWN_TICK_SOUND)
+	_update_skip_status()
+	_check_skip_vote()
+
+
+func _update_skip_status() -> void:
+	var damage := _skip_damage()
+	if skip_voted:
+		skip_button.text = "Skip voted"
+		skip_status.text = "Waiting for opponent (both take %d)" % damage
+	elif _opponent_skip_voted():
+		skip_status.text = "Opponent wants to skip (both take %d)" % damage
+		skip_status.add_theme_color_override("font_color", MatchStyle.color("warning"))
+	else:
+		skip_status.text = ""
+
+
+func _check_skip_vote() -> void:
+	if skip_voted and _opponent_skip_voted():
+		skip_status.text = ""
+		_end_round_as_draw("Both players skipped")
 
 
 # "Freeze" card - opponent locked us out of guessing for a bit.
@@ -314,15 +416,34 @@ func _on_frozen(duration: float) -> void:
 	SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/chill.wav", 0.0, Card.MP_EFFECT_PITCH_VARIATION)
 	show_status("Frozen", Round.FROZEN_STATUS_COLOR)
 	frozen = true
-	await get_tree().create_timer(duration).timeout
+	await get_tree().create_timer(duration, false).timeout
 	if Global.multiplayer_match_over:
 		return
 	frozen = false
 
 
-func _on_chat_submitted(text: String) -> void:
-	MultiplayerSync.send_chat(text)
+const CHAT_HINT_IDLE := "Press T to chat"
+const CHAT_HINT_TYPING := "Enter to send · Esc to close"
+
+
+func _update_chat_hint() -> void:
+	%ChatInput.placeholder_text = CHAT_HINT_TYPING if %ChatInput.has_focus() else CHAT_HINT_IDLE
+
+
+func _focus_chat() -> void:
+	%ChatInput.grab_focus()
+
+
+# Enter in the chat: send (if anything's typed), leave the chat and go
+# straight to the guess field - Enter always means "guess".
+func _submit_chat_and_leave() -> void:
+	var text: String = %ChatInput.text.strip_edges()
+	if not text.is_empty():
+		MultiplayerSync.send_chat(text)
 	%ChatInput.clear()
+	%ChatInput.release_focus()
+	if round_started and not round_advancing:
+		open_guess()
 
 
 func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
@@ -338,6 +459,71 @@ func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
 
 # Global.run.current_round is Run's data-only Round, not the scene - the
 # real Round (which owns the overlay) is this board's parent.
+# --- Round hints (bottom left) ----------------------------------------------
+# Same hints as Normal single player, but free and automatic: the difficulty
+# (pageview tier) after the 3rd chunk reveal, Wikipedia's short description
+# after the 5th. Shown as "after N chunks" until then; left out when the
+# article is shorter than that or Wikipedia had nothing.
+const DIFFICULTY_AT_CHUNK := 3
+const DESCRIPTION_AT_CHUNK := 5
+
+var difficulty_hint: Label
+var description_hint: Label
+
+
+func _build_round_hints() -> void:
+	var box := VBoxContainer.new()
+	box.position = Vector2(12, 400)
+	box.size = Vector2(250, 196)
+	box.alignment = BoxContainer.ALIGNMENT_END
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(box)
+	var total: int = chunks.size() if chunks else 0
+	var current = Global.run.current_round
+	if current.article_daily_views >= 0 and total >= DIFFICULTY_AT_CHUNK:
+		difficulty_hint = _hint_label()
+		box.add_child(difficulty_hint)
+	if current.article_description != "" and total >= DESCRIPTION_AT_CHUNK:
+		description_hint = _hint_label()
+		box.add_child(description_hint)
+	_update_round_hints()
+
+
+func _hint_label() -> Label:
+	var label := Label.new()
+	label.theme_type_variation = &"SmallMuted"
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size.x = 250
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return label
+
+
+func _update_round_hints() -> void:
+	var current = Global.run.current_round
+	if difficulty_hint:
+		var views: float = current.article_daily_views
+		_set_hint(difficulty_hint, reveal_index >= DIFFICULTY_AT_CHUNK, "Difficulty",
+			"%s (~%d views/day)" % [Leaderboards.tier_label_for(views), roundi(views)], DIFFICULTY_AT_CHUNK)
+	if description_hint:
+		_set_hint(description_hint, reveal_index >= DESCRIPTION_AT_CHUNK, "Description",
+			current.article_description, DESCRIPTION_AT_CHUNK)
+
+
+func _set_hint(label: Label, revealed: bool, title: String, value: String, at_chunk: int) -> void:
+	var was_revealed: bool = label.get_meta("revealed", false)
+	if revealed:
+		label.text = "%s: %s" % [title, value]
+		label.add_theme_color_override("font_color", MatchStyle.color("text"))
+		if not was_revealed:
+			label.set_meta("revealed", true)
+			label.modulate = MatchStyle.color("added")
+			create_tween().tween_property(label, "modulate", Color.WHITE, 0.6)
+	else:
+		label.text = "%s · after %d chunks" % [title, at_chunk]
+		label.add_theme_color_override("font_color", Color(MatchStyle.color("muted"), 0.6))
+
+
 func show_status(text: String, color: Color) -> void:
 	get_parent().show_status(text, color)
 
@@ -360,7 +546,7 @@ func _on_chunks_scrambled(duration: float) -> void:
 	for i in range(shuffled.size()):
 		vbox.move_child(shuffled[i], i)
 
-	await get_tree().create_timer(duration).timeout
+	await get_tree().create_timer(duration, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 	for i in range(original_order.size()):
@@ -464,9 +650,22 @@ func close_guess() -> void:
 func _input(event):
 	if not (event is InputEventKey and event.pressed and not event.is_echo()):
 		return
-	if %ChatInput.has_focus() or Global.settings_overlay_open:
-		return  # Enter here sends chat (_on_chat_submitted), not a guess
+	if Global.settings_overlay_open:
+		return
 	var is_enter = event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER
+	if %ChatInput.has_focus():
+		# Handled here, before the LineEdit sees the key.
+		if is_enter:
+			get_viewport().set_input_as_handled()
+			_submit_chat_and_leave()
+		elif event.keycode == KEY_ESCAPE:
+			get_viewport().set_input_as_handled()  # not Global's Esc-presses-Back
+			%ChatInput.release_focus()
+		return
+	if event.keycode == KEY_T and not guess_open:
+		get_viewport().set_input_as_handled()  # so the "t" isn't typed into the chat
+		_focus_chat()
+		return
 	if guess_open and (event.keycode == KEY_ESCAPE or (event.keycode == KEY_BACKSPACE and $InputField.text.is_empty())):
 		close_guess()
 		get_viewport().set_input_as_handled()
@@ -502,10 +701,11 @@ func _input(event):
 
 	guess_checking = true
 	$InputField.wrong_border()
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.5, false).timeout
 	guess_checking = false
 	if not is_inside_tree():
 		return
+	PlayerStats.record_wrong()
 	var self_damage = 50
 	if Global.run.double_down_armed:
 		self_damage = 200
@@ -532,6 +732,7 @@ func correct_guess(typed_guess: String = ""):
 	round_advancing = true
 	reveal_timer.stop()  # pause chunk reveals until the next round starts
 	_stop_timer_charge()
+	skip_button.disabled = true
 
 	Global.setAchievement(Global.getArticleAch(Global.run.current_round.current_id))
 	SoundManagerScript.play_sound("res://assets/sounds/achievements/"+Global.getArticleAchSound(Global.run.current_round.current_id),"SFX")
@@ -541,16 +742,21 @@ func correct_guess(typed_guess: String = ""):
 	if Global.run.double_down_armed:
 		damage *= 2
 		Global.set_double_down_armed(false)
-	MultiplayerSync.send_guess_result(true, damage, typed_guess)
 	# The opponent's own Double Down doubles it again on their side.
 	var damage_dealt = damage * 2 if Global.opponent_double_down_armed else damage
+	# Logged first: in dummy mode the send below can end the match on the spot.
+	Global.run.log_article("you", damage_dealt)
+	PlayerStats.record_correct(Global.run.current_round.image_id, Global.run.current_round.article_title,
+		reveal_index, chunks.size() if chunks else 0)
+	MultiplayerSync.send_guess_result(true, damage, typed_guess)
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return  # dummy-opponent mode routes this synchronously all the way through DummyOpponent -> opponent_match_over -> change_scene_to_file, unlike a real match where this just fires off an async network message - a killing blow here can end the match and free this scene before the next line runs
 
 	close_guess()
 	$ArticleTitle.text = Global.run.current_round.article_title
 	get_parent().show_banner("-%d" % damage_dealt, Round.DAMAGE_DEALT_COLOR)
-	await get_tree().create_timer(2).timeout
+	get_parent().show_answer("", 2.0)  # the article's picture, if it has one
+	await get_tree().create_timer(2, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 
@@ -636,7 +842,7 @@ func _run_card_reward_choice() -> void:
 	# racing each other in on their own independent timers. The overlay stays
 	# up (highlighting the pick) for the whole wait, so the finished round
 	# underneath can't be interacted with in the meantime.
-	var sync_wait = get_tree().create_timer(2.0)
+	var sync_wait = get_tree().create_timer(2.0, false)
 	await _play_card_highlight(result.card)
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
@@ -668,8 +874,8 @@ func _watch_opponent_reward_choice() -> void:
 	# _pending_card_reward_ready is NOT reset here - it's reset once in
 	# _ready() instead (see the comment there), so an already-arrived message
 	# is never mistaken for "nothing yet" and wiped out from under us.
-	var bar_timer = get_tree().create_timer(REWARD_PICK_TIMEOUT_SECONDS)
-	var overall_timeout = get_tree().create_timer(CARD_REWARD_WAIT_TIMEOUT_SECONDS)
+	var bar_timer = get_tree().create_timer(REWARD_PICK_TIMEOUT_SECONDS, false)
+	var overall_timeout = get_tree().create_timer(CARD_REWARD_WAIT_TIMEOUT_SECONDS, false)
 	while not _pending_card_reward_ready:
 		if Global.multiplayer_match_over or not is_inside_tree():
 			overlay.queue_free()
@@ -687,7 +893,7 @@ func _watch_opponent_reward_choice() -> void:
 	else:
 		# The pick message never arrived in time - still worth a beat so this
 		# doesn't slam back into the next round with no explanation at all.
-		await get_tree().create_timer(2.0).timeout
+		await get_tree().create_timer(2.0, false).timeout
 
 	overlay.queue_free()
 
@@ -696,7 +902,7 @@ func _wait_for_reward_picker_signal() -> Array:
 	# Not reset here - see the comment in _ready(). The message races a local
 	# timer on this client, so it can legitimately already be true by the time
 	# this function is even called.
-	var timeout = get_tree().create_timer(REWARD_SYNC_TIMEOUT_SECONDS)
+	var timeout = get_tree().create_timer(REWARD_SYNC_TIMEOUT_SECONDS, false)
 	while not _pending_reward_picker_ready:
 		if Global.multiplayer_match_over or not is_inside_tree():
 			return []
@@ -842,7 +1048,7 @@ func _show_reward_picker(key_a: String, key_b: String) -> Dictionary:
 	_add_reward_card_hover(card_b)
 
 	var timed_out := false
-	var timeout = get_tree().create_timer(REWARD_PICK_TIMEOUT_SECONDS)
+	var timeout = get_tree().create_timer(REWARD_PICK_TIMEOUT_SECONDS, false)
 	while _reward_picked_key == "":
 		if Global.multiplayer_match_over or not is_inside_tree():
 			overlay.queue_free()
@@ -928,7 +1134,7 @@ func _play_card_highlight(card: Card) -> void:
 	if not is_inside_tree():
 		return
 
-	await get_tree().create_timer(1.3).timeout
+	await get_tree().create_timer(1.3, false).timeout
 	if not is_inside_tree():
 		return
 
@@ -952,10 +1158,13 @@ func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> voi
 	close_guess()
 	reveal_timer.stop()  # pause chunk reveals until the next round starts
 	_stop_timer_charge()
+	skip_button.disabled = true
+	skip_status.text = ""
 	Global.run.current_round.card_playable = false
 	if Global.run.double_down_armed:
 		damage *= 2  # our Double Down backfired - they guessed first
 		Global.set_double_down_armed(false)
+	Global.run.log_article("opponent", damage)
 	Global.run.Health.damage(damage)
 	if Global.multiplayer_match_over:
 		return  # damage() can end the match mid-function - bail before touching the freed scene
@@ -970,7 +1179,7 @@ func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> voi
 	else:
 		var footer = "" if simplify_string(guess) == simplify_string(title) else "Answer: " + title
 		get_parent().show_answer(guess, ANSWER_DISPLAY_SECONDS, "Opponent guessed", footer)
-	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS).timeout
+	await get_tree().create_timer(ANSWER_DISPLAY_SECONDS, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 
@@ -1052,7 +1261,7 @@ func get_title_count(text: String) -> int:
 	var count = 0
 	for c in text:
 		# Includes A-Z, a-z, and 0-9
-		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9"):
+		if Global.is_guessable_char(c):
 			count += 1
 	return count
 

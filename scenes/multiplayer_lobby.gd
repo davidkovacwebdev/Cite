@@ -18,7 +18,7 @@ const VERSION_LOBBY_KEY := "cite_version"
 # Bump whenever lobby/match messaging changes in a way older builds can't
 # handle - Find / Host a Game only lists lobbies with this exact value, so players
 # on different builds never end up in the same match.
-const LOBBY_VERSION := "1"
+const LOBBY_VERSION := "2"
 const CONNECTION_TIMEOUT_SECONDS := 15.0
 const PASSWORD_CHECK_TIMEOUT_SECONDS := 10.0
 const BROWSER_REFRESH_SECONDS := 5.0
@@ -242,7 +242,7 @@ func _build_nav() -> void:
 	nav_bar.add_child(spacer)
 
 	var back = Button.new()
-	back.text = "‹  Back to Play"
+	back.text = "‹  Back to Playlists" if Global.lobby_return_scene == "res://scenes/PlaylistsScreen.tscn" else "‹  Back to Play"
 	back.theme_type_variation = "GhostButton"
 	back.focus_mode = Control.FOCUS_NONE
 	back.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -409,6 +409,11 @@ func _on_back_pressed() -> void:
 # Back to Main's Multiplayer submenu, where every way into this scene starts.
 func _go_to_main_menu() -> void:
 	_leave_lobby()
+	var target := Global.lobby_return_scene
+	Global.lobby_return_scene = ""
+	if not target.is_empty():
+		get_tree().change_scene_to_file(target)
+		return
 	Global.return_to_multiplayer_menu = true
 	get_tree().change_scene_to_file(Global.MENU_SCENE)
 

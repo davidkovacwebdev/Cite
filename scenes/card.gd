@@ -111,6 +111,8 @@ func _ready() -> void:
 		# Plex wraps taller than the old font - keep the bonus line under the description.
 		$Description.finished.connect(_place_secondary_text)
 		_place_secondary_text.call_deferred()
+	if Global.uses_modern_ui() and not Global.is_multiplayer_match:
+		_text_only_effect()
 	if Global.is_multiplayer_match:
 		# Text-only in multiplayer: just title + description, which gets the
 		# full card width and the space the effect text/icon used to take.
@@ -122,15 +124,60 @@ func _ready() -> void:
 		$EffectIcon.visible = false
 
 
-func _process(delta: float) -> void:
-	pass
+# Modern single player: no effect icon (those are Legacy's look) - the unit
+# the icon stood for goes into the text instead ("-50 HP", "+10 Mana"), and
+# the text gets the full card width. Deck.generate_card sets the icon before
+# the card enters the tree, so it's known here.
+func _text_only_effect() -> void:
+	var icon: Texture2D = $EffectIcon.texture
+	$EffectIcon.visible = false
+	if icon == null or $EffectText.text.strip_edges().is_empty():
+		return
+	var path := icon.resource_path.get_file()
+	var text: String = $EffectText.text.replace("- ", "-")
+	if path == "exchange.png":
+		var parts := text.split("\n")
+		text = "%s HP\n%s Mana" % [parts[0], parts[1]] if parts.size() == 2 else text
+	elif path == "HP.png":
+		text += " HP"
+	else:
+		text += " Mana"  # every other icon marks a mana cost (draw, skip, reveals)
+	$EffectText.text = text
+	$EffectText.offset_left = 12
+	$EffectText.offset_right = 156
+	$EffectText.offset_top = 155
+	$EffectText.offset_bottom = 215
+	$EffectText.scroll_active = false
+	$EffectText.add_theme_font_size_override("normal_font_size", 16 if text.contains("\n") else 20)
+
+
+func _process(_delta: float) -> void:
+	# A Double Down in hand is greyed out once one's been played this round.
+	if card_type == 3 and action_type == Action_sub_type.double_down and Global.is_multiplayer_match:
+		modulate.a = 0.45 if _double_down_used() else 1.0
+
+
+func _double_down_used() -> bool:
+	return Global.run.double_down_round == Global.run.round_number
 
 
 func _place_secondary_text() -> void:
 	$Description2.position.y = maxf($Description.position.y + $Description.get_content_height() + 6, 100.0)
 
 
+# The HP cost just killed the player: die() already switched to the End
+# Screen, which pulls this match scene out of the tree right away - so stop
+# here instead of touching a board that has no SceneTree any more.
+func _run_ended() -> bool:
+	var board = Global.run.current_round.current_board
+	return Global.run.Health.current_hp <= 0 or not is_instance_valid(board) or not board.is_inside_tree()
+
+
 func play_card():
+	if card_type == 3 and action_type == Action_sub_type.double_down and Global.is_multiplayer_match and _double_down_used():
+		if Global.run.current_round.card_playable:
+			Global.run.current_round.current_board.show_status("Already played", Round.SCRAMBLED_STATUS_COLOR)
+		return
 	Global.run.number_of_played_cards += 1
 	if Global.run.current_round.card_playable == true:
 		if Global.is_multiplayer_match:
@@ -148,6 +195,8 @@ func play_card():
 
 		if (self.card_type == 1):
 			Global.run.Health.damage(50)
+			if _run_ended():
+				return
 			Global.run.current_round.current_board.reveal_chunk(self.order, self.content)
 			
 		if (self.card_type == 2):
@@ -169,6 +218,8 @@ func play_card():
 
 			Global.run.current_round.current_board.update_legacy_effects()
 			Global.run.Health.damage(50)
+			if _run_ended():
+				return
 
 		if (self.card_type == 3):
 			match self.action_type:
@@ -296,6 +347,7 @@ func play_card():
 					# they guess first (handled in multiplayer_board.gd).
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/double-down.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
 					Global.set_double_down_armed(true)
+					Global.run.double_down_round = Global.run.round_number
 				13:
 					# Letter Snipe - free instant version of reveal_letter().
 					SoundManagerScript.play_sfx_overlapping("res://assets/sounds/sfx/multiplayer/letter-snipe.wav", 0.0, MP_EFFECT_PITCH_VARIATION)
@@ -323,6 +375,8 @@ func play_card():
 					Global.run.Health.heal(mp_heal_amount(Global.run.round_number))
 				_:
 					Global.run.Health.damage(500)
+					if _run_ended():
+						return
 					Global.run.current_round.current_board.correct_guess()
 
 
@@ -421,7 +475,7 @@ func reveal_vowels():
 	var new_censored = ""
 	
 	for i in range(title.length()):
-		if title[i] in vowels and censored[i] == "_":
+		if Global.strip_accents(title[i]) in vowels and censored[i] == "_":
 			new_censored += title[i]
 			found_any = true
 		else:

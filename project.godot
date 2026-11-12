@@ -30,6 +30,8 @@ SoundManagerScript="*res://globals/SoundManager.tscn"
 MultiplayerSync="*res://globals/MultiplayerSync.gd"
 Workshop="*res://globals/Workshop.gd"
 Leaderboards="*res://globals/Leaderboards.gd"
+Ratings="*res://globals/Ratings.gd"
+PlayerStats="*res://globals/PlayerStats.gd"
 
 [display]
 

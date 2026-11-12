@@ -13,6 +13,9 @@ var settings: SaveData
 # Which Single Player submenu Normal/Hardcore were picked from - Legacy runs
 # keep the original look (Global.legacy_mode).
 var single_player_legacy := false
+# Opened from the hub's "Legacy" link (Global.open_legacy_menu): only the
+# Legacy Normal/Hardcore screen, original look, Back returns to the hub.
+var legacy_only := false
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -98,6 +101,28 @@ func _ready() -> void:
 	elif Global.return_to_game_menu:
 		Global.return_to_game_menu = false
 		show_mode_selection()
+	if Global.open_legacy_menu:
+		Global.open_legacy_menu = false
+		legacy_only = true
+		_apply_original_look()
+		show_single_player_menu(true)
+
+
+# The menu as it looked before the purple restyle: blue-to-grey gradient
+# (same as a Legacy round), the original logo, Godot's default controls
+# instead of the project theme, dark text.
+func _apply_original_look() -> void:
+	theme = ThemeDB.get_default_theme()
+	var gradient: Gradient = $Gradient.texture.gradient.duplicate()
+	gradient.colors = PackedColorArray([Color(0.615804, 0.74274, 1, 1), Color(0.864675, 0.864675, 0.864675, 1)])
+	var tex: GradientTexture2D = $Gradient.texture.duplicate()
+	tex.gradient = gradient
+	$Gradient.texture = tex
+	$Sprite2D.texture = load("res://assets/sprites/davidovac_logo.png")
+	%Tips.add_theme_color_override("default_color", Color(0.279357, 0.279357, 0.279357, 1))
+	for label in $CenterContainer/VBoxContainer/CategorySelection.find_children("*", "RichTextLabel", false, false):
+		label.add_theme_color_override("default_color", Color.BLACK)
+		label.add_theme_constant_override("outline_size", 0)
 	
 
 # Shows just the named menu items (children of the VBoxContainer).
@@ -169,6 +194,9 @@ func _on_leaderboards_pressed():
 
 func _on_mode_back_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","UI")
+	if legacy_only:
+		get_tree().change_scene_to_file(Global.MENU_SCENE)
+		return
 	show_mode_selection()
 
 func _on_normal_mode_pressed():

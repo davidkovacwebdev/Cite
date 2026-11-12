@@ -66,13 +66,17 @@ var pending_article_count: int = 0
 var pending_preview_path: String = ""
 
 # file_id (String, JSON-safe) -> {"title": String, "time_updated": int,
-# "preview_url": String (URL of the cached preview, "" if none)}, for every
+# "preview_url": String (URL of the cached preview, "" if none),
+# "owner": int (uploader's Steam ID, 0 if unknown), "description": String}, for every
 # community playlist currently available in game - mirrors CACHE_INDEX_PATH,
 # where each one's file is CACHE_DIR/<file_id>.json and its preview icon
 # CACHE_DIR/<file_id>_preview.png.
 var community_playlists: Dictionary = {}
 # file_id (String) -> preview URL Steam reported in the latest refresh
 var latest_preview_urls: Dictionary = {}
+# file_id (String) -> {"owner": uploader's Steam ID, "description"} from the
+# latest refresh, copied into community_playlists once the file is cached.
+var latest_details: Dictionary = {}
 var preview_downloads: Dictionary = {}  # file_id (String) -> HTTPRequest
 var preview_textures: Dictionary = {}  # file_id (String) -> Texture2D
 var is_refreshing: bool = false
@@ -124,6 +128,15 @@ func has_playlist(file_id: int) -> bool:
 
 func get_title(file_id: int) -> String:
 	return community_playlists.get(str(file_id), {}).get("title", "")
+
+
+# Uploader's Steam ID (0 until a refresh has reported it).
+func get_author_id(file_id: int) -> int:
+	return int(community_playlists.get(str(file_id), {}).get("owner", 0))
+
+
+func get_description(file_id: int) -> String:
+	return community_playlists.get(str(file_id), {}).get("description", "")
 
 
 func get_time_updated(file_id: int) -> int:
@@ -203,6 +216,8 @@ func _on_ugc_query_completed(handle: int, result: int, results_returned: int, _t
 			"title": String(item.get("title", "Untitled")),
 			"time_updated": int(item.get("time_updated", 0)),
 			"preview_url": Steam.getQueryUGCPreviewURL(handle, i),
+			"owner": int(item.get("steam_id_owner", 0)),
+			"description": String(item.get("description", "")),
 		}
 	Steam.releaseQueryUGCRequest(handle)
 	_apply_refreshed_list(found)
@@ -265,8 +280,10 @@ func _apply_refreshed_list(found: Dictionary) -> void:
 		var info = found[key]
 		var file_id = int(key)
 		latest_preview_urls[key] = info.preview_url
+		latest_details[key] = {"owner": info.owner, "description": info.description}
 		if has_playlist(file_id) and get_time_updated(file_id) >= info.time_updated:
 			community_playlists[key].title = info.title
+			community_playlists[key].merge(latest_details[key], true)
 			_ensure_preview(file_id)
 		else:
 			_fetch(file_id, info.title, info.time_updated)
@@ -346,6 +363,7 @@ func _cache_from_install(file_id: int, title: String, time_updated: int) -> bool
 	var entry: Dictionary = community_playlists.get(str(file_id), {"preview_url": ""})
 	entry.title = title
 	entry.time_updated = time_updated
+	entry.merge(latest_details.get(str(file_id), {}), true)
 	community_playlists[str(file_id)] = entry
 	return true
 
@@ -433,6 +451,8 @@ func _load_cache_index() -> void:
 				"title": String(entry.get("title", "Untitled")),
 				"time_updated": int(entry.get("time_updated", 0)),
 				"preview_url": String(entry.get("preview_url", "")),
+				"owner": int(entry.get("owner", 0)),
+				"description": String(entry.get("description", "")),
 			}
 
 

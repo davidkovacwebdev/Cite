@@ -4,7 +4,7 @@ extends "res://ui/hub/hub_screen.gd"
 # playground mockup, "Redacted paper" look in ui/hub/hub_theme.tres). Top bar,
 # settings, toasts and widget builders live in hub_screen.gd.
 #
-# Placeholder data (rating) is design only - ranked doesn't exist yet. Daily
+# The Ranked rating comes from globals/Ratings.gd. Daily
 # card + "Today's Daily" come from ui/daily (Steam daily leaderboard). The friends list is the player's real Steam
 # friends. Legacy (the original game, untouched in Main.tscn / Board.tscn) is
 # only a small link in the Single Player popup.
@@ -18,6 +18,8 @@ const FRIENDS_REFRESH_SECONDS := 2.0
 # Mockup placeholders.
 const DailyState := preload("res://ui/daily/daily_state.gd")
 const DAILY_SCENE := "res://ui/daily/daily.tscn"
+const ArticleHighlight := preload("res://ui/hub/article_highlight.gd")
+const HIGHLIGHT_IMAGE_HEIGHT := 96
 
 var reset_label: Label
 var daily_meta: Label
@@ -40,6 +42,8 @@ var friends_box: VBoxContainer
 var friends_note: Label
 var friends_scroll: ScrollContainer
 var friends_refresh_timer: Timer
+var left_column: VBoxContainer
+var sp_first := false
 
 
 func _ready() -> void:
@@ -51,7 +55,12 @@ func _ready() -> void:
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 16)
 	column.add_child(body)
-	body.add_child(_build_left_column())
+	left_column = VBoxContainer.new()
+	left_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_column.add_theme_constant_override("separation", 14)
+	body.add_child(left_column)
+	sp_first = _wants_sp_first()
+	_fill_left_column()
 	body.add_child(_build_right_column())
 	_tick_reset()
 
@@ -61,6 +70,10 @@ func _ready() -> void:
 	matchmaker.failed.connect(func(message: String):
 		_close_modal()
 		_show_toast(message))
+	if not Global.pending_dummy_matchmaking.is_empty():
+		var dummy_mode := Global.pending_dummy_matchmaking
+		Global.pending_dummy_matchmaking = ""
+		_start_matchmaking.call_deferred(dummy_mode, true)
 
 
 func _process(delta: float) -> void:
@@ -79,13 +92,35 @@ func _apply_saved_settings() -> void:
 	SoundManagerScript.set_music_volume(settings.music_volume)
 
 
-# --- Left column: Ranked hero + mode cards ----------------------------------------
+# --- Left column: hero + mode cards -------------------------------------------------
 
-func _build_left_column() -> Control:
-	var left := VBoxContainer.new()
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.add_theme_constant_override("separation", 14)
-	left.add_child(_build_hero())
+# Single Player on top while few people are online (or unknown, e.g. Steam
+# offline), Ranked otherwise; the dev setting overrides it.
+func _wants_sp_first() -> bool:
+	match Global.hub_layout_override:
+		Global.HubLayout.SINGLE_PLAYER:
+			return true
+		Global.HubLayout.MULTIPLAYER:
+			return false
+	return Global.last_player_count < Global.HUB_SP_FIRST_BELOW
+
+
+func _on_player_count(success: int, players: int) -> void:
+	super(success, players)
+	if success != 1:
+		return
+	Global.last_player_count = maxi(players, 1)
+	if _wants_sp_first() != sp_first:
+		sp_first = not sp_first
+		_fill_left_column()
+
+
+func _fill_left_column() -> void:
+	for c in left_column.get_children():
+		left_column.remove_child(c)
+		c.queue_free()
+	var left := left_column
+	left.add_child(_build_sp_hero() if sp_first else _build_hero())
 
 	var modes := HBoxContainer.new()
 	modes.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -120,21 +155,29 @@ func _build_left_column() -> Control:
 	private.add_child(_button("Browse public rooms", "TextLink", func(): _open_lobby("browse")))
 	modes.add_child(private.get_parent())
 
-	# Single Player -> the current (non-Legacy) single player.
-	var single := _mode_card("user", "Single Player", "Your deck, article after article. How far can you get?")
-	single.add_child(_label("Best: 23 rounds · #1,204", "SmallLabel"))
-	single.add_child(_button("Start Run", "", _open_single_player))
-	modes.add_child(single.get_parent())
+	if sp_first:
+		# Ranked moves down into the cards, as the first one.
+		var duel := _mode_card("users", "Ranked Duels", "1v1, first correct guess deals the damage. All articles are random picks from every official playlist.")
+		duel.add_child(_button("Find Match", "", func(): _start_matchmaking("Ranked")))
+		duel.add_child(_button("Quick Play · unranked", "TextLink", func(): _start_matchmaking("Quick Play")))
+		modes.add_child(duel.get_parent())
+		modes.move_child(duel.get_parent(), 0)  # first card, leftmost
+	else:
+		# Single Player -> the current (non-Legacy) single player.
+		var single := _mode_card("user", "Single Player", "Your deck, article after article. How far can you get?")
+		single.add_child(_label("Best: 23 rounds · #1,204", "SmallLabel"))
+		single.add_child(_button("Start Run", "", _open_single_player))
+		modes.add_child(single.get_parent())
 
 	# Playlists -> community playlists screen (next step).
 	var lists := _mode_card("list", "Playlists", "Play 12k+ community playlists or build your own.")
 	lists.add_child(_label("Featured: 90s Bangers", "SmallLabel"))
 	lists.add_child(_button("Browse", "", _on_nav_playlists))
 	modes.add_child(lists.get_parent())
-	return left
 
 
-func _build_hero() -> Control:
+# Hero frame (panel, corner glow, padding); returns [panel, content row].
+func _hero_frame() -> Array:
 	var hero := PanelContainer.new()
 	hero.theme_type_variation = "HeroPanel"
 	hero.custom_minimum_size.y = HERO_HEIGHT
@@ -170,34 +213,75 @@ func _build_hero() -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 28)
 	pad.add_child(row)
+	return [hero, row]
 
+
+# Hero with a stat on the left ([big number, label, sub-label]) and a column
+# of buttons on the right.
+# Returns the stat's number and note labels, for callers that update them.
+func _hero_info(row: HBoxContainer, eyebrow: String, title: String, pitch_text: String, stat: Array) -> Array:
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.add_theme_constant_override("separation", 4)
-	info.add_child(_label("RANKED DUELS", "Eyebrow"))
-	info.add_child(_label("Climb the ladder", "HeaderLarge"))
-	var pitch := _label("1v1 on the same article. First correct guess deals the damage.", "MutedLabel")
+	info.add_child(_label(eyebrow, "Eyebrow"))
+	info.add_child(_label(title, "HeaderLarge"))
+	var pitch := _label(pitch_text, "MutedLabel")
 	pitch.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.add_child(pitch)
 	info.add_child(_spacer(true, 8))
-
-	# Rating (placeholder until ranked exists: wins raise it, losses lower it).
-	var rating_row := HBoxContainer.new()
-	rating_row.add_theme_constant_override("separation", 14)
-	rating_row.add_child(_label(_thousands(PLACEHOLDER_RATING), "BigNumber"))
-	var rating_info := VBoxContainer.new()
-	rating_info.add_theme_constant_override("separation", 0)
-	rating_info.alignment = BoxContainer.ALIGNMENT_CENTER
-	rating_info.add_child(_label("Rating", "StrongLabel"))
-	rating_info.add_child(_label("Win to gain rating, lose to drop it.", "SmallMuted"))
-	rating_row.add_child(rating_info)
-	info.add_child(rating_row)
+	var stat_row := HBoxContainer.new()
+	stat_row.add_theme_constant_override("separation", 14)
+	var number := _label(stat[0], "BigNumber")
+	stat_row.add_child(number)
+	var stat_info := VBoxContainer.new()
+	stat_info.add_theme_constant_override("separation", 0)
+	stat_info.alignment = BoxContainer.ALIGNMENT_CENTER
+	stat_info.add_child(_label(stat[1], "StrongLabel"))
+	var note := _label(stat[2], "SmallMuted")
+	stat_info.add_child(note)
+	stat_row.add_child(stat_info)
+	info.add_child(stat_row)
 	row.add_child(info)
+	return [number, note]
 
+
+func _hero_cta(row: HBoxContainer) -> VBoxContainer:
 	var cta := VBoxContainer.new()
 	cta.custom_minimum_size.x = 270
 	cta.alignment = BoxContainer.ALIGNMENT_CENTER
 	cta.add_theme_constant_override("separation", 10)
+	row.add_child(cta)
+	return cta
+
+
+# Single Player on top (few people online): runs, with Ranked as a card below.
+func _build_sp_hero() -> Control:
+	var frame := _hero_frame()
+	var row: HBoxContainer = frame[1]
+	@warning_ignore("return_value_discarded")
+	_hero_info(row, "SINGLE PLAYER", "How far can you get?",
+		"Your deck, article after article. Pick a playlist, or go Hardcore.",
+		["23", "Best run", "rounds · #1,204 on the leaderboard"])
+	var cta := _hero_cta(row)
+	var start := _button("Start Run", "CtaButton", _open_single_player)
+	start.custom_minimum_size.y = 48
+	cta.add_child(start)
+	cta.add_child(_button("Leaderboards", "", _on_nav_leaderboards))
+	var note := _label("Normal, Hardcore or Legacy", "SmallMuted")
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cta.add_child(note)
+	return frame[0]
+
+
+func _build_hero() -> Control:
+	var frame := _hero_frame()
+	var row: HBoxContainer = frame[1]
+	var stat := _hero_info(row, "RANKED DUELS", "Climb the ladder",
+		"1v1 on the same article. First correct guess deals the damage.",
+		["", "Rating", ""])
+	_watch_rating(stat[0], "%s")
+	_watch_rating(stat[1], "")  # status line, see _refresh_ratings
+	var cta := _hero_cta(row)
 	var find := _button("Find Match", "CtaButton", func(): _start_matchmaking("Ranked"))
 	find.custom_minimum_size.y = 48
 	cta.add_child(find)
@@ -207,8 +291,7 @@ func _build_hero() -> Control:
 	var wait := _label("Random articles from all official playlists", "SmallMuted")
 	wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cta.add_child(wait)
-	row.add_child(cta)
-	return hero
+	return frame[0]
 
 
 # Returns the card's content VBox (its parent is the ModeCard panel).
@@ -244,12 +327,14 @@ func _mode_card(icon: String, title: String, desc: String, tag := "") -> VBoxCon
 	return box
 
 
-# --- Right column: friends + today's Daily ----------------------------------------
+# --- Right column: article of the day, friends, today's Daily -------------------
 
 func _build_right_column() -> Control:
 	var right := VBoxContainer.new()
 	right.custom_minimum_size.x = RIGHT_COLUMN_WIDTH
 	right.add_theme_constant_override("separation", 14)
+
+	right.add_child(_build_highlight())
 
 	var friends := _side_panel("Friends", " ")
 	friends.get_parent().size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -283,6 +368,52 @@ func _build_right_column() -> Control:
 	return right
 
 
+# "Article of the Day": image, title and the start of the intro; clicking
+# opens it on Wikipedia. Fills in once ArticleHighlight has loaded it, and
+# hides itself if it can't (offline).
+func _build_highlight() -> Control:
+	var box := _side_panel("Article of the Day", "Wikipedia")
+	var panel := box.get_parent()
+	panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var image := TextureRect.new()
+	image.custom_minimum_size.y = HIGHLIGHT_IMAGE_HEIGHT
+	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	image.clip_contents = true
+	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(image)
+	var title := _label("Loading...", "NameLabel")
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.custom_minimum_size.x = 60
+	box.add_child(title)
+	var extract := _label("", "SmallMuted")
+	extract.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	extract.max_lines_visible = 2
+	extract.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	extract.custom_minimum_size.x = 60
+	box.add_child(extract)
+	_load_highlight(panel, image, title, extract)
+	return panel
+
+
+func _load_highlight(panel: Control, image: TextureRect, title: Label, extract: Label) -> void:
+	var a := await ArticleHighlight.load_today(self)
+	if not is_instance_valid(panel):
+		return
+	if a.is_empty():
+		panel.visible = false
+		return
+	image.texture = a["texture"]
+	title.text = a["title"]
+	extract.text = a["extract"]
+	panel.tooltip_text = "Read \"%s\" on Wikipedia" % a["title"]
+	var id: int = a["id"]
+	panel.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			SoundManagerScript.play_random_sound_from_folder_with_pitch(CLICK_FOLDER, "SFX")
+			OS.shell_open(ArticleHighlight.page_url(id)))
+
+
 # Real Steam friends: in Cite first, then online, in another game, away,
 # offline. Friends in a Cite lobby get a Join button.
 func _fill_friends() -> void:
@@ -305,6 +436,10 @@ func _fill_friends() -> void:
 		var game: Dictionary = Steam.getFriendGamePlayed(id)
 		var in_cite := not game.is_empty() and int(game.get("id", 0)) == app_id
 		var lobby := int(game.get("lobby", 0)) if in_cite else 0
+		# Older builds made matchmaking lobbies friend-visible - never offer to
+		# join someone who's searching for a match.
+		if lobby != 0 and Steam.getLobbyData(lobby, Matchmaker.GAME_KEY) == Matchmaker.GAME_VALUE:
+			lobby = 0
 		var info := _friend_status(state, game, in_cite, lobby)
 		if state != Steam.PERSONA_STATE_OFFLINE:
 			online += 1
@@ -513,49 +648,57 @@ func _on_join_code() -> void:
 	_open_lobby("join")
 
 
+# Two separate mode cards side by side: Normal holds the playlist list
+# (Official / Community sections) and its own Play button; Hardcore stands
+# apart, since it always draws from every official article.
 func _open_single_player() -> void:
-	var box := _open_modal("Single Player", 360)
-	var hint := _label("Pick a playlist for Normal, or go Hardcore - scored by how obscure each article is.", "MutedLabel")
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(hint)
-	var picker := OptionButton.new()
-	picker.focus_mode = Control.FOCUS_NONE
-	picker.add_item("All playlists")
-	for p in Global.all_playsets:
-		picker.add_item(str(p).capitalize())
-		picker.set_item_metadata(picker.item_count - 1, str(p).to_lower())
-	box.add_child(picker)
-	box.add_child(_button("Normal", "CtaButton", func(): _start_single_player(false, picker.get_selected_metadata())))
-	box.add_child(_button("Hardcore", "", func(): _start_single_player(true, null)))
-	_add_modal_close(box, "Back")
+	var box := _open_modal("Single Player", 760)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	box.add_child(row)
+
+	# Normal: pick a playlist, then play it.
+	var normal := _mode_card("list", "Normal", "Play through one playlist at your own pace.")
+	normal.get_parent().size_flags_stretch_ratio = 1.7
+	row.add_child(normal.get_parent())
+	normal.remove_child(normal.get_child(normal.get_child_count() - 1))  # the card's bottom spacer
+	var selector := PlaylistSelector.new()
+	selector.custom_minimum_size.y = 300
+	selector.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	normal.add_child(selector)
+	var ids := [Global.OFFICIAL_POOL]
+	ids.append_array(Global.get_official_playlist_ids())
+	ids.append_array(Workshop.get_playlist_ids().filter(func(id): return Workshop.has_playlist(Workshop.file_id_of(id))))
+	selector.set_playlists(ids)
+	selector.select(Global.OFFICIAL_POOL)
+	var play := _button("Play Normal", "CtaButton", func():
+		var id := selector.get_selected_id()
+		_start_single_player(false, null if id.is_empty() or id == Global.OFFICIAL_POOL else id))
+	play.clip_text = true
+	play.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	normal.add_child(play)
+	selector.playlist_selected.connect(func(id: String):
+		play.text = "Play Normal" if id == Global.OFFICIAL_POOL else "Play " + Global.get_playlist_display_name(id).trim_suffix(" (Community)"))
+
+	# Hardcore: its own card, no playlist.
+	var hardcore := _mode_card("trophy", "Hardcore", "Every official article, no playlist. Scored by how obscure each article is - the rarer, the more points.", "Ranked")
+	row.add_child(hardcore.get_parent())
+	hardcore.add_child(_button("Play Hardcore", "CtaButton", func(): _start_single_player(true, null)))
 	# The original game, untouched: its own old menu (Main.tscn) and look.
-	var legacy := _button("Legacy", "TextLink", func(): get_tree().change_scene_to_file("res://Main/Main.tscn"))
+	var legacy := _button("Legacy", "TextLink", func():
+		Global.open_legacy_menu = true
+		get_tree().change_scene_to_file("res://Main/Main.tscn"))
 	legacy.add_theme_font_size_override("font_size", 11)
 	legacy.add_theme_color_override("font_color", get_theme_color("muted", "Hub"))
 	legacy.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(legacy)
-
-
-# Same as Main's Single Player Normal/Hardcore (never Legacy).
-func _start_single_player(hardcore: bool, playlist) -> void:
-	Global.selected_categories = []
-	Global.selected_playsets = [] if playlist == null else [playlist]
-	if not hardcore:
-		SoundManagerScript.play_music_direct("res://assets/sounds/music/music.mp3")
-	Global.start_new_run()
-	Global.legacy_mode = false
-	if hardcore:
-		Global.run.current_game_mode = Global.run.GameMode.HARDCORE
-	else:
-		Global.run.current_game_mode = Global.run.GameMode.NORMAL
-	get_tree().change_scene_to_file("res://scenes/Round.tscn")
+	_add_modal_close(box, "Back")
 
 
 # --- Matchmaking overlay ---------------------------------------------------------
 
-func _start_matchmaking(mode_label: String) -> void:
-	if not Steam.loggedOn():
+func _start_matchmaking(mode_label: String, against_bot := false) -> void:
+	if not against_bot and not Steam.loggedOn():
 		_show_toast("Matchmaking needs Steam running")
 		return
 	var playlist := Global.OFFICIAL_POOL
@@ -593,7 +736,7 @@ func _start_matchmaking(mode_label: String) -> void:
 	mm_scan_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mm_scan.add_child(mm_scan_fill)
 
-	mm_sub = _label("Official articles · Searching worldwide", "SmallMuted")
+	mm_sub = _label("Dev: matching you with %s" % DummyOpponent.BOT_NAME if against_bot else "Official articles · Searching worldwide", "SmallMuted")
 	mm_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(mm_sub)
 	var cancel := _button("Cancel", "GhostButton", func():
@@ -605,7 +748,7 @@ func _start_matchmaking(mode_label: String) -> void:
 	box.add_child(cancel)
 
 	mm_started_at = Time.get_ticks_msec() / 1000.0
-	matchmaker.start(playlist, mode_label)
+	matchmaker.start(playlist, mode_label, against_bot)
 
 
 func _on_matchmaking_state(state: int) -> void:
@@ -627,7 +770,7 @@ func _on_matchmaking_state(state: int) -> void:
 func _show_mm_opponent(steam_id: int) -> void:
 	for c in mm_opponent.get_children():
 		c.queue_free()
-	var opponent_name := Steam.getFriendPersonaName(steam_id)
+	var opponent_name := DummyOpponent.BOT_NAME if steam_id == 0 else Steam.getFriendPersonaName(steam_id)
 	mm_opponent.add_child(_label("vs", "MutedLabel"))
 	mm_opponent.add_child(_avatar(opponent_name, 32, steam_id))
 	mm_opponent.add_child(_label(opponent_name, "StrongLabel"))
