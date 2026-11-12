@@ -51,18 +51,19 @@ func _on_opponent_guess_result(correct: bool, damage: int, _guess: String) -> vo
 
 func _load_avatar() -> void:
 	var steam_id = Global.multiplayer_opponent_id
-	var handle = Steam.getMediumFriendAvatar(steam_id)
+	var handle = Steam.getLargeFriendAvatar(steam_id)
 	if handle > 0:
 		_apply_avatar_handle(handle)
 	else:
 		Steam.avatar_image_loaded.connect(_on_avatar_image_loaded)
 
 
-func _on_avatar_image_loaded(steam_id: int, width: int, height: int, buffer: PackedByteArray) -> void:
-	if steam_id != Global.multiplayer_opponent_id:
+# GodotSteam's avatar_image_loaded: (avatar_id, image handle, width, height).
+func _on_avatar_image_loaded(steam_id: int, handle: int, width: int, _height: int) -> void:
+	if steam_id != Global.multiplayer_opponent_id or width < 184:
 		return
 	Steam.avatar_image_loaded.disconnect(_on_avatar_image_loaded)
-	_apply_avatar_image(width, height, buffer)
+	_apply_avatar_handle(handle)
 
 
 func _apply_avatar_handle(handle: int) -> void:
@@ -79,4 +80,5 @@ func _apply_avatar_image(width: int, height: int, buffer: PackedByteArray) -> vo
 	if width <= 0 or height <= 0 or buffer.is_empty():
 		return
 	var image = Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, buffer)
+	image.generate_mipmaps()
 	%Avatar.texture = ImageTexture.create_from_image(image)

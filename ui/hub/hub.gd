@@ -10,7 +10,7 @@ extends "res://ui/hub/hub_screen.gd"
 # only a small link in the Single Player popup.
 
 const Matchmaker := preload("res://ui/hub/matchmaker.gd")
-const HERO_HEIGHT := 226
+const HERO_HEIGHT := 200  # content needs ~197; leaves room for the Ranked notices
 
 # Steam friends list: rebuilt at most this often when statuses change.
 const FRIENDS_REFRESH_SECONDS := 2.0
@@ -122,6 +122,8 @@ func _fill_left_column() -> void:
 		c.queue_free()
 	var left := left_column
 	left.add_child(_build_sp_hero() if sp_first else _build_hero())
+	if not sp_first:
+		left.add_child(_ranked_notices())  # right under the Ranked hero
 
 	var modes := HBoxContainer.new()
 	modes.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -153,14 +155,14 @@ func _fill_left_column() -> void:
 	code_row.add_child(_button("Join", "SmallButton", _on_join_code))
 	private.add_child(code_row)
 	private.add_child(_button("Create Room", "", func(): _open_lobby("host")))
-	private.add_child(_button("Browse public rooms", "TextLink", func(): _open_lobby("browse")))
+	private.add_child(_button("Browse public rooms", "OutlineButton", func(): _open_lobby("browse")))
 	modes.add_child(private.get_parent())
 
 	if sp_first:
 		# Ranked moves down into the cards, as the first one.
 		var duel := _mode_card("users", "Ranked Duels", "1v1, first correct guess deals the damage. All articles are random picks from every official playlist.")
 		duel.add_child(_button("Find Match", "", func(): _start_matchmaking("Ranked")))
-		duel.add_child(_button("Quick Play · unranked", "TextLink", func(): _start_matchmaking("Quick Play")))
+		duel.add_child(_button("Quick Play · unranked", "OutlineButton", func(): _start_matchmaking("Quick Play")))
 		modes.add_child(duel.get_parent())
 		modes.move_child(duel.get_parent(), 0)  # first card, leftmost
 	else:
@@ -186,6 +188,8 @@ func _fill_left_column() -> void:
 	lists.add_child(lists_spotlight)
 	lists.add_child(_button("Browse", "", _on_nav_playlists))
 	modes.add_child(lists.get_parent())
+	if sp_first:
+		left.add_child(_ranked_notices())  # under the cards (Ranked Duels is the first)
 	_refresh_playlists_card()
 	if not Workshop.community_playlists_changed.is_connected(_refresh_playlists_card):
 		Workshop.community_playlists_changed.connect(_refresh_playlists_card)
@@ -356,6 +360,19 @@ func _build_hero() -> Control:
 	wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cta.add_child(wait)
 	return frame[0]
+
+
+# Under the Ranked hero: no googling + the pre-season note, side by side.
+func _ranked_notices() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var fair := _notice(FAIR_PLAY_TEXT, "accent", true)
+	fair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(fair)
+	var season := _notice(PRESEASON_TEXT)
+	season.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(season)
+	return row
 
 
 # Returns the card's content VBox (its parent is the ModeCard panel).
@@ -587,13 +604,9 @@ func _friend_row(f: Dictionary) -> Control:
 	row.add_child(text)
 
 	var friend_id: int = f["id"]
-	# Double-clicking the row opens the chat too (the buttons keep their own
-	# clicks).
-	hover.gui_input.connect(func(event: InputEvent):
-		if event is InputEventMouseButton and event.double_click \
-				and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			SoundManagerScript.play_random_sound_from_folder_with_pitch(CLICK_FOLDER, "SFX")
-			_open_steam_chat(friend_id))
+	var friend_name: String = f["name"]
+	# Clicking the row opens their profile (the chat button keeps its own click).
+	_make_clickable(hover, func(): _open_profile(friend_id, friend_name), "View profile")
 	var chat :=_button("", "RowIconButton", func(): _open_steam_chat(friend_id))
 	chat.icon = load(ICON_DIR + "message-circle.svg")
 	chat.expand_icon = true
@@ -749,7 +762,7 @@ func _open_single_player() -> void:
 	row.add_child(hardcore.get_parent())
 	hardcore.add_child(_button("Play Hardcore", "CtaButton", func(): _start_single_player(true, null)))
 	# The original game, untouched: its own old menu (Main.tscn) and look.
-	var legacy := _button("Legacy", "TextLink", func():
+	var legacy := _button("Legacy", "OutlineButton", func():
 		Global.open_legacy_menu = true
 		get_tree().change_scene_to_file("res://Main/Main.tscn"))
 	legacy.add_theme_font_size_override("font_size", 11)
@@ -803,6 +816,7 @@ func _start_matchmaking(mode_label: String, against_bot := false) -> void:
 	mm_sub = _label("Dev: matching you with %s" % DummyOpponent.BOT_NAME if against_bot else "Official articles · Searching worldwide", "SmallMuted")
 	mm_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(mm_sub)
+	box.add_child(_notice(FAIR_PLAY_TEXT, "accent", true))
 	var cancel := _button("Cancel", "GhostButton", func():
 		matchmaker.cancel()
 		_close_modal())

@@ -78,13 +78,18 @@ func submit_rating(rating: int, wins: int, losses: int) -> bool:
 
 # {"ok": Steam answered, "entry": the player's entry or {} if they have none}.
 func own_entry(board_name: String) -> Dictionary:
+	return await user_entry(board_name, Steam.getSteamID())
+
+
+# Like own_entry, for any player (another player's profile).
+func user_entry(board_name: String, steam_id: int) -> Dictionary:
 	var result = {"ok": false, "entry": {}}
-	if not Steam.loggedOn():
+	if not Steam.loggedOn() or steam_id == 0:
 		return result
 	await _lock()
 	var handle = await _find_handle(board_name)
 	if handle != 0:
-		Steam.downloadLeaderboardEntriesForUsers([Steam.getSteamID()], handle)
+		Steam.downloadLeaderboardEntriesForUsers([steam_id], handle)
 		var reply = await _wait_reply()
 		if reply != null:
 			result["ok"] = true

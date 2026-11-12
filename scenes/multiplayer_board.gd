@@ -3,6 +3,9 @@ extends Control
 class_name MultiplayerBoard
 
 const MAX_GUESS_DAMAGE := 600.0
+# Correct-guess damage grows each round: x(1 + this x (round - 1)), so
+# round 1 = 600 max, round 5 = 840, round 10 = 1140. Keeps late rounds decisive.
+const GUESS_DAMAGE_GROWTH_PER_ROUND := 0.10
 const TIMER_BAR_HEIGHT := 380.0
 const GRACE_PERIOD_SECONDS := 5.0
 # Colours: the hub's paper theme (ui/hub/hub_theme.tres, "Hub" type).
@@ -11,7 +14,9 @@ const MatchStyle := preload("res://ui/match/match_style.gd")
 # _maybe_reveal_title_letter).
 const TITLE_LETTER_EVERY_N_CHUNKS := 2
 # How long a drawn round's answer box stays up before the next round.
-const ANSWER_DISPLAY_SECONDS := 4.0
+const ANSWER_DISPLAY_SECONDS := 5.5
+# The article's picture after your own correct guess.
+const CORRECT_IMAGE_SECONDS := 3.5
 # HP both players lose on a drawn round, times the round number.
 const DRAW_DAMAGE_PER_ROUND := 100
 # "Skip article": once both players vote, the round ends like a draw (same
@@ -125,8 +130,9 @@ func _ready() -> void:
 	MultiplayerSync.chat_message_added.connect(_add_chat_line)
 	MultiplayerSync.opponent_skip_voted.connect(_on_opponent_skip_voted)
 	_build_skip_vote()
-	# Enter/T/Esc for the chat are handled in _input (Enter always ends up in
-	# the guess field); the placeholder doubles as the key hint.
+	_build_mute_toggle()
+	# Enter/T/Esc for the chat are handled in _input; the placeholder doubles
+	# as the key hint.
 	%ChatInput.focus_entered.connect(_update_chat_hint)
 	%ChatInput.focus_exited.connect(_update_chat_hint)
 	_update_chat_hint()
@@ -434,19 +440,57 @@ func _focus_chat() -> void:
 	%ChatInput.grab_focus()
 
 
-# Enter in the chat: send (if anything's typed), leave the chat and go
-# straight to the guess field - Enter always means "guess".
+# Enter in the chat: send (if anything's typed) and leave the chat. The guess
+# field doesn't open - press Enter again for that.
 func _submit_chat_and_leave() -> void:
 	var text: String = %ChatInput.text.strip_edges()
 	if not text.is_empty():
 		MultiplayerSync.send_chat(text)
 	%ChatInput.clear()
 	%ChatInput.release_focus()
-	if round_started and not round_advancing:
-		open_guess()
+
+
+# "Mute" above the chat: hides the opponent's messages, now and in every
+# later match against them (Global.set_player_muted saves it).
+var mute_button: Button
+
+func _build_mute_toggle() -> void:
+	const HubScreen := preload("res://ui/hub/hub_screen.gd")
+	HubScreen._ensure_outline_button(HubScreen.HUB_THEME)
+	mute_button = Button.new()
+	mute_button.theme = HubScreen.HUB_THEME
+	mute_button.theme_type_variation = "OutlineButton"
+	mute_button.toggle_mode = true
+	mute_button.focus_mode = Control.FOCUS_NONE
+	mute_button.add_theme_font_size_override("font_size", 12)
+	mute_button.button_pressed = Global.is_player_muted(Global.multiplayer_opponent_id)
+	mute_button.toggled.connect(func(on: bool):
+		Global.set_player_muted(Global.multiplayer_opponent_id, on, Global.multiplayer_opponent_name)
+		_update_mute_button()
+		_rebuild_chat_log())
+	%ChatInput.get_parent().add_child(mute_button)
+	%ChatInput.get_parent().move_child(mute_button, 0)
+	_update_mute_button()
+
+
+func _update_mute_button() -> void:
+	var muted := Global.is_player_muted(Global.multiplayer_opponent_id)
+	mute_button.text = "Unmute %s" % Global.multiplayer_opponent_name if muted else "Mute %s" % Global.multiplayer_opponent_name
+	mute_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	mute_button.clip_text = true
+	mute_button.tooltip_text = ("Their messages are hidden. Remembered for future matches." if muted
+		else "Hide their chat messages. Remembered for future matches.")
+
+
+func _rebuild_chat_log() -> void:
+	%ChatLog.clear()
+	for entry in MultiplayerSync.chat_history:
+		_add_chat_line(entry.name, entry.text, entry.own)
 
 
 func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
+	if not is_own and Global.is_player_muted(Global.multiplayer_opponent_id):
+		return  # muted (still kept in chat_history, so unmuting shows it)
 	# Both strings come from other players - escape "[" so they can't inject
 	# BBCode into the log.
 	%ChatLog.append_text("[color=#%s][b]%s:[/b][/color] [color=#%s]%s[/color]\n" % [
@@ -555,13 +599,15 @@ func _on_chunks_scrambled(duration: float) -> void:
 
 # Guessing earlier (fewer chunks revealed) deals more damage. Max damage is
 # dealt right after the first chunk is revealed, then drops by a fixed step
-# (1000 / total chunks) for every chunk revealed since.
+# (MAX_GUESS_DAMAGE / total chunks) for every chunk revealed since. All of it
+# grows with the round number (GUESS_DAMAGE_GROWTH_PER_ROUND).
 func _current_guess_damage() -> int:
+	var round_factor := 1.0 + GUESS_DAMAGE_GROWTH_PER_ROUND * float(maxi(Global.run.round_number - 1, 0))
 	if not chunks or chunks.size() <= 0:
-		return int(MAX_GUESS_DAMAGE)
+		return int(round(MAX_GUESS_DAMAGE * round_factor))
 	var step = MAX_GUESS_DAMAGE / float(chunks.size())
 	var chunks_shown = max(reveal_index, 1)
-	return int(round(MAX_GUESS_DAMAGE - float(chunks_shown - 1) * step))
+	return int(round((MAX_GUESS_DAMAGE - float(chunks_shown - 1) * step) * round_factor))
 
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
@@ -735,7 +781,7 @@ func correct_guess(typed_guess: String = ""):
 	skip_button.disabled = true
 
 	Global.setAchievement(Global.getArticleAch(Global.run.current_round.current_id))
-	SoundManagerScript.play_sound("res://assets/sounds/achievements/"+Global.getArticleAchSound(Global.run.current_round.current_id),"SFX")
+	Global.play_article_ach_sound(Global.run.current_round.current_id)
 	Global.run.current_round.card_playable = false
 
 	var damage = _current_guess_damage()
@@ -755,8 +801,8 @@ func correct_guess(typed_guess: String = ""):
 	close_guess()
 	$ArticleTitle.text = Global.run.current_round.article_title
 	get_parent().show_banner("-%d" % damage_dealt, Round.DAMAGE_DEALT_COLOR)
-	get_parent().show_answer("", 2.0)  # the article's picture, if it has one
-	await get_tree().create_timer(2, false).timeout
+	get_parent().show_answer("", CORRECT_IMAGE_SECONDS)  # the article's picture, if it has one
+	await get_tree().create_timer(CORRECT_IMAGE_SECONDS, false).timeout
 	if Global.multiplayer_match_over or not is_inside_tree():
 		return
 
@@ -1201,7 +1247,7 @@ func _advance_round(i_am_winner: bool = true) -> void:
 	Global.run.round_number += 1
 	if Global.run.last_article == true:
 		Global.end_multiplayer_match("won" if i_am_winner else "lost")
-		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+		Global.show_match_end()
 	else:
 		Global.run.current_round.end_round()
 

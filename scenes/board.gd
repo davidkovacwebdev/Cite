@@ -111,7 +111,7 @@ func correct_guess():
 	round_advancing = true
 
 	Global.setAchievement(Global.getArticleAch(Global.run.current_round.current_id))
-	SoundManagerScript.play_sound("res://assets/sounds/achievements/"+Global.getArticleAchSound(Global.run.current_round.current_id),"SFX")
+	Global.play_article_ach_sound(Global.run.current_round.current_id)
 	Global.run.current_round.card_playable = false
 	Global.run.Health.heal(50)
 	Leaderboards.record_correct_guess()

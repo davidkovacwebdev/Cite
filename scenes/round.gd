@@ -15,6 +15,10 @@ const ANSWER_IMAGE_MAX := Vector2(420, 240)
 const ANSWER_IMAGE_ONLY_MAX := Vector2(380, 260)
 const ANSWER_IMAGE_ONLY_TOP := 240.0
 const ArticleImage := preload("res://components/article_image.gd")
+# Multiplayer: after the last hit (or last article) both players see the
+# result + the final article for this long before the end screen.
+const MATCH_END_HOLD_SECONDS := 4.5
+const END_SCREEN := "res://scenes/EndScreen.tscn"
 
 var current_id
 # Wikipedia page id whose lead image goes with the answer (ArticleImage) -
@@ -35,6 +39,9 @@ var article_daily_views: float = -1.0
 var article_description: String = ""
 var article_censored_title
 var current_board
+var answer_layers: Array = []  # open show_answer() boxes (finish_match clears them)
+var banner_tween: Tween
+var finishing := false  # finish_match() running
 var current_deck
 var current_deck_card_count:int
 
@@ -167,17 +174,19 @@ func _apply_match_style() -> void:
 	%BigBanner.add_theme_font_override("normal_font", preload("res://ui/fonts/fraunces_600.tres"))
 
 
-func show_banner(text: String, color: Color = Color(0.75, 0.08, 0.08)) -> void:
+func show_banner(text: String, color: Color = Color(0.75, 0.08, 0.08), hold := 1.5) -> void:
 	if MatchStyle.active():
 		color = MatchStyle.paper(color)
 	var banner = %BigBanner
 	banner.text = text
 	banner.add_theme_color_override("default_color", color)
 	banner.modulate.a = 0.0
-	var tween = create_tween()
-	tween.tween_property(banner, "modulate:a", 1.0, 0.3)
-	tween.tween_interval(1.5)
-	tween.tween_property(banner, "modulate:a", 0.0, 0.5)
+	if banner_tween:
+		banner_tween.kill()  # a newer banner wins over one still fading
+	banner_tween = create_tween()
+	banner_tween.tween_property(banner, "modulate:a", 1.0, 0.3)
+	banner_tween.tween_interval(hold)
+	banner_tween.tween_property(banner, "modulate:a", 0.0, 0.5)
 	
 	
 # Centered box revealing the article title after a multiplayer round nobody
@@ -198,6 +207,7 @@ func show_answer(title: String, duration: float, caption_text: String = "The ans
 	var layer = CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
+	answer_layers.append(layer)
 
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -338,18 +348,19 @@ func create_skip_icons():
 func _setup_self_identity() -> void:
 	var steam_id = Steam.getSteamID()
 	%SelfNameLabel.text = Global.get_own_name()
-	var handle = Steam.getMediumFriendAvatar(steam_id)
+	var handle = Steam.getLargeFriendAvatar(steam_id)
 	if handle > 0:
 		_apply_self_avatar_handle(handle)
 	else:
 		Steam.avatar_image_loaded.connect(_on_self_avatar_image_loaded)
 
 
-func _on_self_avatar_image_loaded(steam_id: int, width: int, height: int, buffer: PackedByteArray) -> void:
-	if steam_id != Steam.getSteamID():
+# GodotSteam's avatar_image_loaded: (avatar_id, image handle, width, height).
+func _on_self_avatar_image_loaded(steam_id: int, handle: int, width: int, _height: int) -> void:
+	if steam_id != Steam.getSteamID() or width < 184:
 		return
 	Steam.avatar_image_loaded.disconnect(_on_self_avatar_image_loaded)
-	_apply_self_avatar_image(width, height, buffer)
+	_apply_self_avatar_handle(handle)
 
 
 func _apply_self_avatar_handle(handle: int) -> void:
@@ -366,4 +377,46 @@ func _apply_self_avatar_image(width: int, height: int, buffer: PackedByteArray) 
 	if width <= 0 or height <= 0 or buffer.is_empty():
 		return
 	var image = Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, buffer)
+	image.generate_mipmaps()
 	%SelfAvatar.texture = ImageTexture.create_from_image(image)
+
+
+# Multiplayer match over (any way: last hit, last article, opponent left or
+# timed out): freeze the board, show the result and the final article for
+# MATCH_END_HOLD_SECONDS, then the end screen. Global.show_match_end calls
+# this; Global.multiplayer_match_outcome is already set.
+func finish_match(reason := "") -> void:
+	if finishing:
+		return
+	finishing = true
+	if get_tree().paused:
+		get_tree().paused = false
+	for child in get_children():
+		if child is MultiplayerBoard:
+			child.close_guess()
+			child.process_mode = Node.PROCESS_MODE_DISABLED  # timers, typing, cards
+	for layer in answer_layers:
+		if is_instance_valid(layer):
+			layer.queue_free()
+	answer_layers.clear()
+	# Nothing below the result is clickable any more.
+	var blocker_layer := CanvasLayer.new()
+	blocker_layer.layer = 9
+	add_child(blocker_layer)
+	var blocker := Control.new()
+	blocker.set_anchors_preset(Control.PRESET_FULL_RECT)
+	blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	blocker_layer.add_child(blocker)
+
+	var won := Global.multiplayer_match_outcome == "won"
+	var hold := MATCH_END_HOLD_SECONDS
+	show_banner("You won!" if won else "You lost", DAMAGE_DEALT_COLOR if won else DAMAGE_TAKEN_COLOR, hold - 0.8)
+	var title := String(Global.run.current_round.article_title) if Global.run.current_round else ""
+	if reason != "":
+		show_answer(reason, hold, "Match over")
+	elif title != "":
+		show_answer(title, hold, "Last article")
+	answer_layers.clear()  # these stay up until the scene changes
+	await get_tree().create_timer(hold, true, false, true).timeout
+	if is_inside_tree():
+		get_tree().change_scene_to_file(END_SCREEN)

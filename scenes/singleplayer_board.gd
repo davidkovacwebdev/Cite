@@ -174,7 +174,7 @@ func correct_guess():
 	close_guess()
 
 	Global.setAchievement(Global.getArticleAch(Global.run.current_round.current_id))
-	SoundManagerScript.play_sound("res://assets/sounds/achievements/" + Global.getArticleAchSound(Global.run.current_round.current_id), "SFX")
+	Global.play_article_ach_sound(Global.run.current_round.current_id)
 	Global.run.current_round.card_playable = false
 	Global.run.Health.heal(CORRECT_GUESS_HEAL)
 	var points = Leaderboards.record_correct_guess()
@@ -188,8 +188,8 @@ func correct_guess():
 	if Global.run.current_game_mode == Global.run.GameMode.HARDCORE:
 		banner += " +%d" % points
 	get_parent().show_banner(banner, CORRECT_COLOR)
-	get_parent().show_answer("", 2.0)  # the article's picture, if it has one
-	await get_tree().create_timer(2).timeout
+	get_parent().show_answer("", 3.5)  # the article's picture, if it has one
+	await get_tree().create_timer(3.5).timeout
 	if not is_inside_tree():  # left the match during the pause
 		return
 	Global.run.current_round.card_playable = true

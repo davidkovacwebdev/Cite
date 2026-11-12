@@ -22,9 +22,20 @@ var rating_number: Label
 var rating_status: Label
 
 
+var viewed_id := 0  # 0 = your own profile
+var viewed_name := ""
+
+
 func _ready() -> void:
 	if Global.all_playsets.is_empty():
 		Global.load_and_extract_card_data()
+	viewed_id = Global.profile_view_id
+	viewed_name = Global.profile_view_name
+	Global.profile_view_id = 0  # next visit (e.g. the Profile tab) is your own again
+	Global.profile_view_name = ""
+	if viewed_id != 0:
+		_build_other_profile()
+		return
 	var column := _setup_screen("Profile")
 
 	var scroll := ScrollContainer.new()
@@ -52,7 +63,7 @@ func _ready() -> void:
 	right.add_child(_build_bests())
 	right.add_child(_build_lifetime())
 	right.add_child(_build_daily())
-	right.add_child(_build_playlists())
+	right.add_child(_build_own_uploads("Your playlists"))
 	var back := _button("Back to Play", "GhostButton", _on_nav_play)
 	right.add_child(back)
 
@@ -248,10 +259,14 @@ func _match_row(m: Dictionary) -> Control:
 	result.add_theme_color_override("font_color", get_theme_color("added" if won else "accent", "Hub"))
 	row.add_child(result)
 	var opponent := String(m.get("opponent", ""))
+	var opponent_id := int(m.get("opponent_id", 0))
 	var who := _label("vs " + (opponent if not opponent.is_empty() else "?"), "NameLabel")
 	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	who.clip_text = true
 	who.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	if opponent_id != 0 and opponent_id != viewed_id:
+		who.add_theme_color_override("font_color", get_theme_color("host_name", "Hub"))
+		_make_clickable(who, func(): _open_profile(opponent_id, opponent), "View %s's profile" % opponent)
 	row.add_child(who)
 	row.add_child(_fixed(_label("%d - %d articles" % [int(m.get("mine", 0)), int(m.get("theirs", 0))], "SmallMuted"), 100))
 	var kind: String
@@ -282,9 +297,9 @@ func _build_bests() -> Control:
 	return bests_box.get_parent()
 
 
-# Hardcore, every official playlist's Normal board, and today's Daily - one
-# Steam request each, so rows appear as they load.
-func _load_bests() -> void:
+# Hardcore and every official playlist's Normal board - one Steam request
+# each, so rows appear as they load. steam_id 0 = your own.
+func _load_bests(steam_id := 0) -> void:
 	if not Steam.loggedOn():
 		bests_box.add_child(_wrapped("Bests need Steam running.", "MutedLabel"))
 		return
@@ -295,7 +310,11 @@ func _load_bests() -> void:
 		boards.append([Leaderboards.normal_board_name(playlist), Global.get_playlist_display_name(playlist), false])
 	var any := false
 	for board in boards:
-		var result: Dictionary = await Leaderboards.own_entry(board[0])
+		var result: Dictionary
+		if steam_id == 0:
+			result = await Leaderboards.own_entry(board[0])
+		else:
+			result = await Leaderboards.user_entry(board[0], steam_id)
 		if not is_inside_tree():
 			return
 		var entry: Dictionary = result["entry"]
@@ -308,7 +327,8 @@ func _load_bests() -> void:
 		bests_box.add_child(_kv(board[1], "%s  #%s" % [text, _thousands(int(entry.get("global_rank", 0)))]))
 	loading.queue_free()
 	if not any:
-		bests_box.add_child(_wrapped("No runs on the leaderboards yet. Finish a Normal or Hardcore run to get on them.", "MutedLabel"))
+		bests_box.add_child(_wrapped("No runs on the leaderboards yet. Finish a Normal or Hardcore run to get on them." if steam_id == 0
+			else "No single player runs on the leaderboards yet.", "MutedLabel"))
 
 
 func _build_lifetime() -> Control:
@@ -364,30 +384,6 @@ func _build_daily() -> Control:
 	return box.get_parent()
 
 
-# Community playlists (approved, so they're in the browser) uploaded by this
-# player. Pending ones only show on the Workshop itself.
-func _build_playlists() -> Control:
-	var box := _side_panel("Your playlists")
-	var own_id := Steam.getSteamID() if Steam.loggedOn() else 0
-	var count := 0
-	for playlist_id in Workshop.get_playlist_ids():
-		var file_id := Workshop.file_id_of(playlist_id)
-		if own_id != 0 and Workshop.get_author_id(file_id) == own_id:
-			count += 1
-			var row := _button(Workshop.get_title(file_id), "TextLink", func(): _open_playlist(file_id))
-			row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			box.add_child(row)
-	if count == 0:
-		box.add_child(_wrapped("None approved yet. Uploads waiting for approval show on the Workshop.", "MutedLabel"))
-	box.add_child(_button("Upload a playlist", "GhostButton", func(): _open_lobby("submit")))
-	return box.get_parent()
-
-
-func _open_playlist(file_id: int) -> void:
-	Global.multiplayer_playlist_id = Workshop.playlist_id_of(file_id)  # the Playlists screen opens on it
-	get_tree().change_scene_to_file(PLAYLISTS_SCENE)
-
-
 # --- Helpers ------------------------------------------------------------------
 
 func _panel(variation: String) -> PanelContainer:
@@ -441,3 +437,114 @@ static func _ago(unix: int) -> String:
 	if secs < 86400:
 		return "%dh ago" % (secs / 3600)
 	return "%dd ago" % (secs / 86400)
+
+
+# --- Another player's profile ---------------------------------------------------
+# What Steam knows about them: name, avatar, Ranked rating + record (the
+# mp_rating board), their bests on the single player boards. Plus your own
+# head-to-head history with them (PlayerStats). Their collection, streaks and
+# match history live on their PC, so they aren't shown.
+
+func _build_other_profile() -> void:
+	var column := _setup_screen("")  # no tab highlighted - the Profile tab goes to yours
+	if viewed_name.is_empty() and Steam.loggedOn():
+		viewed_name = Steam.getFriendPersonaName(viewed_id)
+	if viewed_name.is_empty():
+		viewed_name = "Player"
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	var body := HBoxContainer.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_theme_constant_override("separation", 16)
+	scroll.add_child(body)
+
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 16)
+	body.add_child(left)
+	left.add_child(_build_other_header())
+	left.add_child(_build_head_to_head())
+
+	var right := VBoxContainer.new()
+	right.custom_minimum_size.x = RIGHT_COLUMN_WIDTH
+	right.add_theme_constant_override("separation", 14)
+	body.add_child(right)
+	right.add_child(_build_bests())
+	var back_to := Global.profile_return_scene
+	var back := _button("Back", "GhostButton", func():
+		get_tree().change_scene_to_file(back_to if not back_to.is_empty() else HUB_SCENE))
+	right.add_child(back)
+	_load_bests(viewed_id)
+	_load_other_rating()
+
+
+func _build_other_header() -> Control:
+	var panel := _panel("TablePanel")
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	panel.add_child(row)
+	var avatar := _avatar(viewed_name, AVATAR_SIZE, viewed_id)
+	avatar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(avatar)
+
+	var who := VBoxContainer.new()
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	who.alignment = BoxContainer.ALIGNMENT_CENTER
+	who.add_theme_constant_override("separation", 6)
+	who.add_child(_label("PLAYER", "Eyebrow"))
+	var name_label := _label(viewed_name, "HeaderLarge")
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	who.add_child(name_label)
+	var id := viewed_id
+	var steam_button := _button("Steam profile", "OutlineButton", func():
+		Steam.activateGameOverlayToUser("steamid", id))
+	steam_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	who.add_child(steam_button)
+	row.add_child(who)
+
+	var rating := _stat_tile("-", "Rating", "Loading..." if Steam.loggedOn() else "Needs Steam")
+	rating_number = rating[1]
+	rating_status = rating[2]
+	row.add_child(rating[0])
+	return panel
+
+
+func _load_other_rating() -> void:
+	if not Steam.loggedOn():
+		return
+	var result: Dictionary = await Leaderboards.user_entry(Leaderboards.RATING_NAME, viewed_id)
+	if not is_inside_tree():
+		return
+	var entry: Dictionary = result["entry"]
+	if entry.is_empty():
+		rating_status.text = "No Ranked matches yet" if result["ok"] else "Couldn't load"
+		return
+	rating_number.text = _thousands(int(entry.get("score", 0)))
+	var details = entry.get("details", [])
+	var record := "%d W · %d L" % [int(details[0]), int(details[1])] if details.size() >= 2 else ""
+	rating_status.text = "%s · #%s" % [record, _thousands(int(entry.get("global_rank", 0)))] if record != "" \
+		else "#%s" % _thousands(int(entry.get("global_rank", 0)))
+
+
+# Your matches against them, from your own history (PlayerStats keeps the last 30).
+func _build_head_to_head() -> Control:
+	var panel := _panel("TablePanel")
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+	box.add_child(_label("HEAD TO HEAD", "Eyebrow"))
+	var mine := PlayerStats.matches.filter(func(m): return int(m.get("opponent_id", 0)) == viewed_id)
+	var wins := mine.filter(func(m): return m.get("outcome", "") == "won").size()
+	if mine.is_empty():
+		box.add_child(_label("You vs %s" % viewed_name, "HeaderMedium"))
+		box.add_child(_wrapped("No matches against %s in your recent history. Invite them to a Private Match from the Play tab." % viewed_name, "MutedLabel"))
+		return panel
+	box.add_child(_label("You %d - %d %s" % [wins, mine.size() - wins, viewed_name], "HeaderMedium"))
+	for m in mine:
+		box.add_child(_match_row(m))
+	return panel
+

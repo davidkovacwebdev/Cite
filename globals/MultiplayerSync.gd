@@ -381,7 +381,7 @@ func _on_opponent_match_over(outcome: String) -> void:
 	Ratings.finish_match(outcome)
 	Global.leave_multiplayer_lobby()
 	reset_connection()
-	get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+	Global.show_match_end()
 
 
 func _on_opponent_left() -> void:
@@ -392,7 +392,7 @@ func _on_opponent_left() -> void:
 	Ratings.finish_match("won")
 	Global.leave_multiplayer_lobby()
 	reset_connection()
-	get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+	Global.show_match_end("Opponent left")
 
 
 # --- Reconnecting (see the constants at the top) ------------------------------------
@@ -477,7 +477,7 @@ func _give_up_reconnecting() -> void:
 func _leave_match_as_loss() -> void:
 	Global.end_multiplayer_match("lost")  # also resets the connection (unpauses)
 	_set_paused(false)
-	get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+	Global.show_match_end("Connection lost")
 
 
 func _set_paused(paused: bool) -> void:

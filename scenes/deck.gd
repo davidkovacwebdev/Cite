@@ -215,7 +215,7 @@ func generate_card(type, content, order:int = 0, special_action = -1):
 		elif card.action_type == 17:
 			var heal_amount = Card.mp_heal_amount(Global.run.round_number)
 			card_title.text = "Heal"
-			card_description.text = "Restores %d HP.\nScales with the round: 300 x round / 2." % heal_amount
+			card_description.text = "Restores %d HP.\nScales with the round: %d x round / 2." % [heal_amount, Card.MP_HEAL_BASE]
 			effect_symbol.texture = load("res://assets/sprites/HP.png")
 			effect_symbol.position = effect_symbol.position + Vector2(-5, 5)
 			effect_text.text = "+%d" % heal_amount

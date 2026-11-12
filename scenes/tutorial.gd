@@ -27,5 +27,7 @@ func _on_prev_btn_pressed():
 		
 
 
+# Only reachable from Legacy now, so Return goes back there.
 func _on_return_pressed() -> void:
-	get_tree().change_scene_to_file(Global.MENU_SCENE)
+	Global.open_legacy_menu = true
+	get_tree().change_scene_to_file("res://Main/Main.tscn")

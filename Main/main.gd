@@ -108,6 +108,12 @@ func _ready() -> void:
 		Global.open_legacy_menu = false
 		legacy_only = true
 		_apply_original_look()
+		# The original Credits and Tutorial live here now: just above Back.
+		var vbox := $CenterContainer/VBoxContainer
+		var back_button := $CenterContainer/VBoxContainer/ModeBack
+		for node in [$CenterContainer/VBoxContainer/Credits, $CenterContainer/VBoxContainer/Tutorial]:
+			var target: int = back_button.get_index() - (1 if node.get_index() < back_button.get_index() else 0)
+			vbox.move_child(node, target)
 		show_single_player_menu(true)
 
 
@@ -158,7 +164,10 @@ func show_multiplayer_menu():
 # Show the Single Player or Legacy submenu (Normal, Hardcore, Back)
 func show_single_player_menu(legacy: bool):
 	single_player_legacy = legacy
-	_show_menu_items(["NormalMode", "HardcoreMode", "ModeBack"])
+	if legacy_only:
+		_show_menu_items(["NormalMode", "HardcoreMode", "Credits", "Tutorial", "ModeBack"])
+	else:
+		_show_menu_items(["NormalMode", "HardcoreMode", "ModeBack"])
 
 
 func _connect_tip(button: Control, text: String) -> void:

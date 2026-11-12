@@ -167,5 +167,8 @@ func die():
 	if is_display_only:
 		return
 	if current_hp<= 0:
-		Global.end_multiplayer_match("lost")
-		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+		if Global.is_multiplayer_match:
+			Global.end_multiplayer_match("lost")
+			Global.show_match_end()
+		else:
+			get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")

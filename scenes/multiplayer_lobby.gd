@@ -820,6 +820,8 @@ func _on_lobby_message(message_lobby_id: int, user: int, message: String, _chat_
 			# dropped, so a wrong-password joiner can't spam the room.
 			if is_host and user == guest_id and not guest_verified:
 				return
+			if Global.is_player_muted(user):
+				return  # muted in a match before (Global.set_player_muted)
 			_add_player_chat(user, payload)
 		MSG_PASSWORD:
 			if not is_host or user != guest_id or guest_verified:
@@ -1253,19 +1255,21 @@ func _load_avatar(steam_id: int, target: TextureRect) -> void:
 	# getXFriendAvatar returns an image handle immediately if it's already
 	# cached locally, or <= 0 if Steam still needs to download it - in that
 	# case the avatar_image_loaded signal delivers it once ready.
-	var handle = Steam.getMediumFriendAvatar(steam_id)
+	var handle = Steam.getLargeFriendAvatar(steam_id)
 	if handle > 0:
 		_apply_avatar_handle(handle, target)
 	else:
 		pending_avatars[steam_id] = target
 
 
-func _on_avatar_image_loaded(steam_id: int, width: int, height: int, buffer: PackedByteArray) -> void:
-	if not pending_avatars.has(steam_id):
+# GodotSteam's avatar_image_loaded: (avatar_id, image handle, width, height).
+func _on_avatar_image_loaded(steam_id: int, handle: int, width: int, _height: int) -> void:
+	if not pending_avatars.has(steam_id) or width < 184:
 		return
 	var target: TextureRect = pending_avatars[steam_id]
 	pending_avatars.erase(steam_id)
-	_apply_avatar_image(width, height, buffer, target)
+	if is_instance_valid(target):
+		_apply_avatar_handle(handle, target)
 
 
 func _apply_avatar_handle(handle: int, target: TextureRect) -> void:
@@ -1282,6 +1286,7 @@ func _apply_avatar_image(width: int, height: int, buffer: PackedByteArray, targe
 	if width <= 0 or height <= 0 or buffer.is_empty():
 		return
 	var image = Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, buffer)
+	image.generate_mipmaps()
 	target.texture = ImageTexture.create_from_image(image)
 
 

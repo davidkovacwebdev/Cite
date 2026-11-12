@@ -17,6 +17,8 @@ const HUB_SCENE := "res://ui/hub/hub.tscn"
 const LEADERBOARD_SCENE := "res://scenes/LeaderboardScreen.tscn"
 const PLAYLISTS_SCENE := "res://scenes/PlaylistsScreen.tscn"
 const PROFILE_SCENE := "res://scenes/ProfileScreen.tscn"
+const CREDITS_SCENE := "res://scenes/CreditsScreen.tscn"
+const ROADMAP_SCENE := "res://scenes/RoadmapScreen.tscn"
 const SETTINGS_PATH := "user://scene_data.tres"
 const ICON_DIR := "res://ui/icons/"
 const LOGO := "res://ui/hub/cite_logo_ink.png"
@@ -30,7 +32,7 @@ const NOTIFICATIONS_WIDTH := 320
 
 # Notifications are built from the player's own data (no backend): today's
 # Daily, Daily streak, recent Ranked results, newly added official playlists,
-# a first-run tutorial hint. Read/dismissed ids, when each was first seen and
+# a first-run hint. Read/dismissed ids, when each was first seen and
 # which official playlists the player already knows are kept in HUB_STATE_PATH.
 const HUB_STATE_PATH := "user://hub_state.cfg"
 const DailyStateRef := preload("res://ui/daily/daily_state.gd")
@@ -57,6 +59,7 @@ var online_label: Label
 func _setup_screen(tab: String, show_top_bar := true) -> VBoxContainer:
 	active_tab = tab
 	theme = HUB_THEME
+	_ensure_outline_button(HUB_THEME)
 	settings = ResourceLoader.load(SETTINGS_PATH) as SaveData
 	if not settings:
 		settings = SaveData.new()
@@ -115,13 +118,17 @@ func _build_top_bar() -> Control:
 	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	logo.custom_minimum_size = Vector2(86, 34)
 	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_make_clickable(logo, func():
+		if active_tab != "Play":
+			_on_nav_play(), "Home")
 	bar.add_child(logo)
 
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 2)
 	var group := ButtonGroup.new()
 	for entry in [["Play", _on_nav_play], ["Playlists", _on_nav_playlists],
-			["Leaderboards", _on_nav_leaderboards], ["Profile", _on_nav_profile]]:
+			["Leaderboards", _on_nav_leaderboards], ["Profile", _on_nav_profile],
+			["Roadmaps", _on_nav_roadmaps]]:
 		var tab := Button.new()
 		tab.text = entry[0]
 		tab.theme_type_variation = "NavTab"
@@ -191,6 +198,9 @@ func _profile_chip() -> Control:
 	who.add_child(rating)
 	_watch_rating(rating, "Rating %s")
 	row.add_child(who)
+	_make_clickable(chip, func():
+		if active_tab != "Profile":
+			_on_nav_profile(), "Your profile")
 	return chip
 
 
@@ -334,8 +344,8 @@ func _current_events(cfg: ConfigFile, now: int) -> Array:
 	# Hasn't played anything yet.
 	if int(PlayerStats.totals["runs"]) == 0 and int(PlayerStats.totals["matches"]) == 0 \
 			and PlayerStats.daily_days().is_empty():
-		events.append({"id": "tutorial", "icon": "sparkles", "title": "New to Cite?",
-			"body": "The Tutorial (in Settings) shows how a round works in a minute."})
+		events.append({"id": "first_steps", "icon": "sparkles", "title": "New to Cite?",
+			"body": "Start with today's Daily Challenge or a Single Player run: guess the Wikipedia article from its censored text."})
 	return events
 
 
@@ -520,13 +530,148 @@ func _on_nav_leaderboards() -> void:
 
 
 func _on_nav_profile() -> void:
+	_open_profile(0)
+
+
+func _on_nav_roadmaps() -> void:
+	get_tree().change_scene_to_file(ROADMAP_SCENE)
+
+
+# Your profile (steam_id 0 or your own id) or another player's.
+func _open_profile(steam_id: int, player_name := "") -> void:
+	if Steam.loggedOn() and steam_id == Steam.getSteamID():
+		steam_id = 0
+	Global.profile_view_id = steam_id
+	Global.profile_view_name = player_name
+	Global.profile_return_scene = scene_file_path if steam_id != 0 else ""
 	get_tree().change_scene_to_file(PROFILE_SCENE)
+
+
+# Makes a whole widget clickable (pointer cursor, click sound).
+func _make_clickable(c: Control, on_click: Callable, tip := "") -> void:
+	c.mouse_filter = Control.MOUSE_FILTER_STOP
+	c.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if tip != "":
+		c.tooltip_text = tip
+	c.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			SoundManagerScript.play_random_sound_from_folder_with_pitch(CLICK_FOLDER, "UI")
+			on_click.call())
 
 
 # Opens the lobby's host form with this playlist already picked.
 func _create_room_with(playlist_id: String) -> void:
 	Global.multiplayer_playlist_id = playlist_id
 	_open_lobby("host")
+
+
+# --- Your uploads (Profile + Playlists) ---------------------------------------
+# Every playlist you published to the Workshop - approved ones and ones still
+# waiting - with its status and a Delete button (removes it from the Workshop
+# for everyone, after a confirm).
+
+var own_uploads_list: VBoxContainer
+
+
+func _build_own_uploads(title := "Your uploads") -> Control:
+	var box := _side_panel(title, "Steam Workshop")
+	own_uploads_list = VBoxContainer.new()
+	own_uploads_list.add_theme_constant_override("separation", 8)
+	box.add_child(own_uploads_list)
+	box.add_child(_button("Upload a playlist", "GhostButton", func(): _open_lobby("submit")))
+	_fill_own_uploads()
+	Workshop.own_playlists_changed.connect(_fill_own_uploads)
+	Workshop.community_playlists_changed.connect(_fill_own_uploads)  # approval status
+	Workshop.playlist_deleted.connect(_on_playlist_deleted)
+	Workshop.refresh_own_playlists()
+	return box.get_parent()
+
+
+func _fill_own_uploads() -> void:
+	if not is_instance_valid(own_uploads_list):
+		return
+	for c in own_uploads_list.get_children():
+		c.queue_free()
+	var note := ""
+	if not Steam.loggedOn():
+		note = "Needs Steam running."
+	elif Workshop.own_playlists == null:
+		note = "Loading..."
+	elif Workshop.own_playlists.is_empty():
+		note = "You haven't uploaded any playlists yet."
+	if note != "":
+		var l := _label(note, "MutedLabel")
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		own_uploads_list.add_child(l)
+		return
+	for p in Workshop.own_playlists:
+		own_uploads_list.add_child(_own_upload_row(p))
+
+
+func _own_upload_row(p: Dictionary) -> Control:
+	var file_id := int(p["file_id"])
+	var title := String(p["title"])
+	var approved: bool = Workshop.community_playlists.has(str(file_id))
+	var status := "Approved · in game"
+	if p.get("banned", false):
+		status = "Removed by Steam"
+	elif int(p.get("visibility", 0)) == 2:
+		status = "Private on Steam (accept the Workshop agreement)"
+	elif not approved:
+		status = "Waiting for approval"
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var text := VBoxContainer.new()
+	text.add_theme_constant_override("separation", 0)
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var name_label := _label(title, "NameLabel")
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.custom_minimum_size.x = 60
+	text.add_child(name_label)
+	var status_label := _label(status, "SmallMuted")
+	status_label.add_theme_font_size_override("font_size", 11)
+	status_label.add_theme_color_override("font_color", get_theme_color("added" if approved else "muted", "Hub"))
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.add_child(status_label)
+	row.add_child(text)
+	# Approved: open it in the Playlists browser. Otherwise: its Workshop page.
+	_make_clickable(text, func():
+		if Workshop.community_playlists.has(str(file_id)):
+			_open_playlist(file_id)
+		else:
+			Workshop.open_item_page(file_id),
+		"Open in Playlists" if approved else "Open on the Steam Workshop")
+	var delete := _button("Delete", "OutlineButton", func(): _confirm_delete_playlist(file_id, title))
+	delete.add_theme_color_override("font_color", get_theme_color("accent", "Hub"))
+	delete.add_theme_color_override("font_hover_color", get_theme_color("accent", "Hub"))
+	delete.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(delete)
+	return row
+
+
+func _confirm_delete_playlist(file_id: int, title: String) -> void:
+	var box := _open_modal("Delete playlist?", 380)
+	var msg := _label("\"%s\" will be removed from the Steam Workshop for everyone, and from the game. This can't be undone." % title, "BodyLabel")
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(msg)
+	var delete := _button("Delete playlist", "CtaButton", func():
+		_close_modal()
+		_show_toast("Deleting...")
+		Workshop.delete_playlist(file_id))
+	box.add_child(delete)
+	_add_modal_close(box, "Cancel")
+
+
+func _on_playlist_deleted(_file_id: int, _ok: bool, message: String) -> void:
+	if is_inside_tree():
+		_show_toast(message)
+
+
+# Opens the Playlists browser on this community playlist.
+func _open_playlist(file_id: int) -> void:
+	Global.multiplayer_playlist_id = Workshop.playlist_id_of(file_id)  # the Playlists screen opens on it
+	get_tree().change_scene_to_file(PLAYLISTS_SCENE)
 
 
 func _open_lobby(entry: String) -> void:
@@ -644,13 +789,20 @@ func _refresh_avatar(steam_id: int) -> void:
 	if not Steam.loggedOn() or not avatar_targets.has(steam_id):
 		return
 	# 0 = no avatar set, -1 = still loading (avatar_image_loaded follows).
-	var handle := Steam.getMediumFriendAvatar(steam_id)
+	# Large (184px) so it stays sharp at profile size; mipmaps keep it clean small.
+	var handle := Steam.getLargeFriendAvatar(steam_id)
 	if handle > 0:
 		_apply_avatar(steam_id, handle)
 
 
 func _on_avatar_image_loaded(steam_id: int, image_handle: int, _width: int, _height: int) -> void:
 	_apply_avatar(steam_id, image_handle)
+
+
+# Steam can answer with a cached smaller avatar first; ignore those while the
+# large one is still on its way (getLargeFriendAvatar returned -1).
+func avatar_large_pending(steam_id: int) -> bool:
+	return Steam.loggedOn() and Steam.getLargeFriendAvatar(steam_id) <= 0
 
 
 func _apply_avatar(steam_id: int, handle: int) -> void:
@@ -664,7 +816,10 @@ func _apply_avatar(steam_id: int, handle: int) -> void:
 	var height := int(size_data["height"])
 	if width <= 0 or height <= 0:
 		return
+	if width < 184 and avatar_large_pending(steam_id):
+		return  # a smaller copy than we asked for - the large one follows
 	var image := Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, buffer_data["buffer"])
+	image.generate_mipmaps()
 	var texture := ImageTexture.create_from_image(image)
 	var alive := []
 	for img in avatar_targets[steam_id]:
@@ -722,6 +877,68 @@ func _side_panel(title: String, note := "", variation := "SidePanel") -> VBoxCon
 	gap.custom_minimum_size.y = 4
 	box.add_child(gap)
 	return box
+
+
+# "OutlineButton": secondary action under a main button (Quick Play under
+# Find Match, Browse public rooms, ...) - ink outline that fills on hover, so
+# it reads as a button, not as text. Added to the shared theme in memory once.
+static func _ensure_outline_button(t: Theme) -> void:
+	if t.is_type_variation("OutlineButton", "Button"):
+		return
+	t.set_type_variation("OutlineButton", "Button")
+	var ink: Color = t.get_color("text", "Hub")
+	var muted: Color = t.get_color("muted", "Hub")
+	var fill := Color(0.914, 0.899, 0.87)  # GhostButton's hover paper
+	var make := func(bg: Color, border: Color, draw_bg: bool) -> StyleBoxFlat:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = bg
+		sb.draw_center = draw_bg
+		sb.border_color = border
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(2)
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		sb.content_margin_top = 5
+		sb.content_margin_bottom = 5
+		return sb
+	t.set_stylebox("normal", "OutlineButton", make.call(fill, ink, false))
+	t.set_stylebox("hover", "OutlineButton", make.call(fill, ink, true))
+	t.set_stylebox("pressed", "OutlineButton", make.call(fill.darkened(0.06), ink, true))
+	t.set_stylebox("hover_pressed", "OutlineButton", make.call(fill.darkened(0.06), ink, true))
+	t.set_stylebox("disabled", "OutlineButton", make.call(fill, Color(muted, 0.5), false))
+	t.set_stylebox("focus", "OutlineButton", StyleBoxEmpty.new())
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		t.set_color(state, "OutlineButton", ink)
+	t.set_color("font_disabled_color", "OutlineButton", Color(muted, 0.6))
+	t.set_font_size("font_size", "OutlineButton", 13)
+
+
+# Ranked / Quick Play notices.
+const FAIR_PLAY_TEXT := "No googling. Looking up answers during a match is forbidden and counts as cheating."
+const PRESEASON_TEXT := "Note: Ranked mode is in its early stages, so don't take it too seriously. Think of this as a pre-season."
+
+
+# A small note in a plain 1px box, like the rest of the paper look.
+# color_name: the border's "Hub" colour.
+func _notice(text: String, color_name := "border", strong := false) -> Control:
+	var panel := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.draw_center = false
+	sb.border_color = get_theme_color(color_name, "Hub")
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 5
+	sb.content_margin_bottom = 5
+	panel.add_theme_stylebox_override("panel", sb)
+	var l := _label(text, "SmallLabel" if strong else "SmallMuted")
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size.x = 120
+	if strong:
+		l.add_theme_color_override("font_color", get_theme_color("text", "Hub"))
+	panel.add_child(l)
+	return panel
 
 
 # Segmented toggle (e.g. Normal | Hardcore). on_select gets the index.
@@ -834,7 +1051,8 @@ func _open_settings() -> void:
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	for entry in [["Tutorial", "res://scenes/Tutorial.tscn"], ["Credits", "res://scenes/Credits.tscn"]]:
+	# (The Tutorial and the original credits screen live under Legacy now.)
+	for entry in [["Credits", CREDITS_SCENE]]:
 		var path: String = entry[1]
 		var b := _button(entry[0], "SmallButton", func(): get_tree().change_scene_to_file(path))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL

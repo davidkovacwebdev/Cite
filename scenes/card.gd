@@ -52,7 +52,7 @@ enum Action_sub_type {
 	mp_heal
 }
 
-const MP_HEAL_BASE := 300
+const MP_HEAL_BASE := 150  # halved from 300 (2026-11-12): heal was too strong
 # Slight random pitch on each card effect sound so repeats don't sound canned.
 const MP_EFFECT_PITCH_VARIATION := 0.05
 # heal.mp3 is ~5 dB hotter than the other multiplayer card sounds.
@@ -64,8 +64,8 @@ const MP_HOVER_LIFT := 30.0
 # Legacy card's second line (its bonus) on the dark single player card.
 const MODERN_SECONDARY_TEXT_COLOR := Color(0.78, 0.7, 1.0)
 
-# Scales with the round it's played in: base * round / 2 (round 2 = 300,
-# round 6 = 900, ...).
+# Scales with the round it's played in: base * round / 2 (round 2 = 150,
+# round 6 = 450, ...).
 static func mp_heal_amount(round_number: int) -> int:
 	return int(MP_HEAL_BASE * round_number / 2.0)
 

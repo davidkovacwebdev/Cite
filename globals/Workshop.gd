@@ -23,6 +23,9 @@ signal upload_progress(stage: String, fraction: float)
 signal upload_finished(success: bool, file_id: int, message: String, needs_legal_agreement: bool)
 signal community_playlists_changed
 signal playlist_ready(file_id: int, ok: bool)
+# Your own uploads (refresh_own_playlists) - approved or still waiting.
+signal own_playlists_changed
+signal playlist_deleted(file_id: int, ok: bool, message: String)
 
 const APP_ID := 4339350
 const PLAYLIST_FILENAME := "playlist.json"
@@ -86,12 +89,21 @@ var collection_request: HTTPRequest
 # file_id -> {"title", "time_updated"} for downloads still in flight
 var pending_downloads: Dictionary = {}
 
+# Every playlist this player published (createQueryUserUGCRequest), newest
+# first: [{"file_id", "title", "time_created", "visibility", "approved"}].
+# null until the first refresh_own_playlists() answers.
+var own_playlists = null
+var own_query_handle: int = 0
+var own_loading := false
+var pending_delete_id: int = 0
+
 
 func _ready() -> void:
 	Steam.item_created.connect(_on_item_created)
 	Steam.item_updated.connect(_on_item_updated)
 	Steam.ugc_query_completed.connect(_on_ugc_query_completed)
 	Steam.item_downloaded.connect(_on_item_downloaded)
+	Steam.item_deleted.connect(_on_item_deleted)
 	set_process(false)
 	collection_request = HTTPRequest.new()
 	collection_request.timeout = COLLECTION_TIMEOUT_SECONDS
@@ -197,6 +209,9 @@ func _send_query() -> void:
 
 
 func _on_ugc_query_completed(handle: int, result: int, results_returned: int, _total_matching: int, _cached: bool, _next_cursor: String = "") -> void:
+	if handle == own_query_handle and own_loading:
+		_on_own_query_completed(handle, result, results_returned)
+		return
 	if handle != query_handle or not is_refreshing:
 		return
 	if result != Steam.RESULT_OK:
@@ -291,6 +306,81 @@ func _apply_refreshed_list(found: Dictionary) -> void:
 	_save_cache_index()
 	_end_refresh()
 	community_playlists_changed.emit()
+
+
+# --- Your own uploads (Profile / Playlists "Your uploads") -------------------
+
+# Asks Steam for every playlist this player published, including ones still
+# waiting for approval. own_playlists_changed fires when it answers.
+func refresh_own_playlists() -> void:
+	if own_loading or not Steam.loggedOn():
+		return
+	var account_id := Steam.getSteamID() & 0xFFFFFFFF
+	own_query_handle = Steam.createQueryUserUGCRequest(account_id, Steam.USER_UGC_LIST_PUBLISHED,
+		Steam.UGC_MATCHING_UGC_TYPE_ITEMS_READY_TO_USE, Steam.USER_UGC_LIST_SORT_ORDER_CREATION_ORDER_DESC,
+		APP_ID, APP_ID, 1)
+	if own_query_handle == Steam.UGC_QUERY_HANDLE_INVALID:
+		return
+	own_loading = true
+	Steam.addRequiredTag(own_query_handle, PLAYLIST_TAG)
+	Steam.setAllowCachedResponse(own_query_handle, 0)
+	Steam.sendQueryUGCRequest(own_query_handle)
+
+
+func _on_own_query_completed(handle: int, result: int, results_returned: int) -> void:
+	own_loading = false
+	own_query_handle = 0
+	var list := []
+	if result == Steam.RESULT_OK:
+		for i in results_returned:
+			var item: Dictionary = Steam.getQueryUGCResult(handle, i)
+			if item.get("result", 0) != Steam.RESULT_OK:
+				continue
+			var file_id := int(item.get("file_id", 0))
+			list.append({
+				"file_id": file_id,
+				"title": String(item.get("title", "Untitled")),
+				"time_created": int(item.get("time_created", 0)),
+				"visibility": int(item.get("visibility", 0)),  # 0 public, 1 friends, 2 private, 3 unlisted
+				"banned": bool(item.get("banned", false)),
+				"approved": community_playlists.has(str(file_id)),
+			})
+	else:
+		print("Workshop: own playlists query failed (%s)" % _result_text(result))
+	Steam.releaseQueryUGCRequest(handle)
+	own_playlists = list if result == Steam.RESULT_OK else (own_playlists if own_playlists != null else [])
+	own_playlists_changed.emit()
+
+
+# Permanently removes one of your playlists from the Steam Workshop (for
+# everyone). playlist_deleted fires with the result.
+func delete_playlist(file_id: int) -> void:
+	if pending_delete_id != 0 or not Steam.loggedOn():
+		playlist_deleted.emit(file_id, false, "Another delete is still running." if pending_delete_id != 0 else "Needs Steam running.")
+		return
+	pending_delete_id = file_id
+	Steam.deleteItem(file_id)
+
+
+func _on_item_deleted(result: int, file_id: int) -> void:
+	if file_id != pending_delete_id:
+		return  # e.g. the clean-up after a failed upload
+	pending_delete_id = 0
+	if result != Steam.RESULT_OK:
+		playlist_deleted.emit(file_id, false, "Couldn't delete it: " + _result_text(result))
+		return
+	var key := str(file_id)
+	if community_playlists.has(key):
+		community_playlists.erase(key)
+		preview_textures.erase(key)
+		DirAccess.remove_absolute(cache_path(file_id))
+		DirAccess.remove_absolute(preview_path(file_id))
+		_save_cache_index()
+		community_playlists_changed.emit()
+	if own_playlists != null:
+		own_playlists = own_playlists.filter(func(p): return int(p["file_id"]) != file_id)
+		own_playlists_changed.emit()
+	playlist_deleted.emit(file_id, true, "Playlist deleted.")
 
 
 func _end_refresh() -> void:

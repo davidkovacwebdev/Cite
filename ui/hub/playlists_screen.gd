@@ -38,6 +38,7 @@ func _ready() -> void:
 	right.add_theme_constant_override("separation", 14)
 	body.add_child(right)
 	right.add_child(_build_details())
+	right.add_child(_build_own_uploads())
 	var back := _button("Back to Play", "GhostButton", _on_nav_play)
 	right.add_child(back)
 
@@ -137,7 +138,7 @@ func _build_details() -> Control:
 	details_box.add_child(_button("Create Room", "", func():
 		if _still_available():
 			_create_room_with(selected_id)))
-	workshop_button = _button("View on Steam Workshop", "TextLink", func():
+	workshop_button = _button("View on Steam Workshop", "OutlineButton", func():
 		Workshop.open_item_page(Workshop.file_id_of(selected_id)))
 	workshop_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	details_box.add_child(workshop_button)
@@ -206,6 +207,13 @@ func _on_persona_state_change(steam_id: int, _flags: int) -> void:
 func _show_details(on: bool) -> void:
 	details_box.visible = on
 	empty_label.visible = not on
+
+
+# Already on the Playlists screen: just select it.
+func _open_playlist(file_id: int) -> void:
+	var id := Workshop.playlist_id_of(file_id)
+	if selector.has_playlist(id):
+		_select(id)
 
 
 # A community playlist can be withdrawn by a refresh while it's shown.

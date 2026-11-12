@@ -261,6 +261,60 @@ func end_multiplayer_match(my_outcome: String) -> void:
 	leave_multiplayer_lobby()
 	MultiplayerSync.reset_connection()
 
+# Profile screen target: 0 = your own profile, else another player's Steam ID
+# (hub_screen._open_profile sets these; ProfileScreen reads and resets them).
+var profile_view_id: int = 0
+var profile_view_name: String = ""
+var profile_return_scene: String = ""  # where its Back button goes
+
+# --- Muted players -------------------------------------------------------------
+# Players whose chat is hidden (match chat and private-room chat), by Steam
+# ID. Saved in MUTED_PLAYERS_PATH, so it carries over to future games. The
+# toggle is in the match's chat panel (MultiplayerBoard).
+signal muted_players_changed
+const MUTED_PLAYERS_PATH := "user://muted_players.cfg"
+var _muted_players = null  # steam_id -> name, loaded on first use
+
+
+func is_player_muted(steam_id: int) -> bool:
+	return _muted().has(steam_id)
+
+
+func set_player_muted(steam_id: int, muted: bool, player_name := "") -> void:
+	var list: Dictionary = _muted()
+	if muted:
+		list[steam_id] = player_name
+	else:
+		list.erase(steam_id)
+	var cfg := ConfigFile.new()
+	for id in list:
+		cfg.set_value("muted", str(id), list[id])
+	cfg.save(MUTED_PLAYERS_PATH)
+	muted_players_changed.emit()
+
+
+func _muted() -> Dictionary:
+	if _muted_players == null:
+		_muted_players = {}
+		var cfg := ConfigFile.new()
+		if cfg.load(MUTED_PLAYERS_PATH) == OK and cfg.has_section("muted"):
+			for key in cfg.get_section_keys("muted"):
+				_muted_players[key.to_int()] = cfg.get_value("muted", key, "")
+	return _muted_players
+
+
+# Multiplayer match over: the Round shows the result + final article for a
+# moment (Round.finish_match), then the end screen. Straight to the end screen
+# when no match scene is up. reason: shown instead of the article title
+# (e.g. "Opponent left").
+func show_match_end(reason := "") -> void:
+	var scene := get_tree().current_scene
+	if scene and scene.has_method("finish_match"):
+		scene.finish_match(reason)
+	else:
+		get_tree().change_scene_to_file("res://scenes/EndScreen.tscn")
+
+
 func leave_multiplayer_lobby() -> void:
 	if multiplayer_lobby_id != 0:
 		Steam.leaveLobby(multiplayer_lobby_id)
@@ -565,6 +619,15 @@ func getArticleAch(id):
 	
 	print("No match found for ID: ", target_id)
 	return ""
+
+# Plays the article's achievement sound, if it has one ("" = no achievement,
+# "/" = achievement without a sound).
+func play_article_ach_sound(id) -> void:
+	var sound = getArticleAchSound(id)
+	if sound == null or String(sound) in ["", "/"]:
+		return
+	SoundManagerScript.play_sound("res://assets/sounds/achievements/" + String(sound), "SFX")
+
 
 func getArticleAchSound(id):
 	if achievement_data == null or achievement_data.is_empty():
