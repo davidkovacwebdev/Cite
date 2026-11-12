@@ -28,14 +28,15 @@ const TOAST_SECONDS := 2.2
 const PLAYER_COUNT_REFRESH_SECONDS := 60.0
 const NOTIFICATIONS_WIDTH := 320
 
-# Notifications (dummy for now - there's no backend). Read/dismissed ids and
-# when each was first seen are kept in HUB_STATE_PATH. Delete that file to
-# see them again.
+# Notifications are built from the player's own data (no backend): today's
+# Daily, Daily streak, recent Ranked results, newly added official playlists,
+# a first-run tutorial hint. Read/dismissed ids, when each was first seen and
+# which official playlists the player already knows are kept in HUB_STATE_PATH.
 const HUB_STATE_PATH := "user://hub_state.cfg"
-const NOTIFICATIONS := [
-	{"id": "welcome", "icon": "sparkles", "title": "Welcome to Cite!",
-		"body": "Guess Wikipedia articles from censored text. Start a run, or challenge a friend to a Private Match."},
-]
+const DailyStateRef := preload("res://ui/daily/daily_state.gd")
+const STREAK_WARNING_SECONDS := 4 * 3600  # "streak ends soon" this close to reset
+const RANKED_NOTICE_SECONDS := 3 * 86400  # Ranked results stay this long
+const NEW_PLAYLIST_SECONDS := 14 * 86400  # "new playlist" stays this long
 
 var settings: SaveData
 var toast: Label
@@ -247,29 +248,101 @@ func _hub_state() -> ConfigFile:
 	return cfg
 
 
-# Notifications the player hasn't dismissed, each with "unread" and "seen_at".
+# Notifications the player hasn't dismissed, each with "unread" and "seen_at"
+# (the event's own time when it has one, else when it first showed up).
 func _notifications() -> Array:
 	var cfg := _hub_state()
-	var dismissed: Array = cfg.get_value("notifications", "dismissed", [])
-	var read: Array = cfg.get_value("notifications", "read", [])
-	var seen: Dictionary = cfg.get_value("notifications", "seen_at", {})
 	var now := int(Time.get_unix_time_from_system())
-	var changed := false
+	var current := _current_events(cfg, now)
+	var ids := current.map(func(n): return n["id"])
+	# Keep the saved lists to events that still apply, so they don't grow forever.
+	var dismissed: Array = cfg.get_value("notifications", "dismissed", []).filter(func(id): return id in ids)
+	var read: Array = cfg.get_value("notifications", "read", []).filter(func(id): return id in ids)
+	var seen := {}
+	var old_seen: Dictionary = cfg.get_value("notifications", "seen_at", {})
 	var out := []
-	for n in NOTIFICATIONS:
+	for n in current:
+		seen[n["id"]] = old_seen.get(n["id"], now)
 		if n["id"] in dismissed:
 			continue
-		if not seen.has(n["id"]):
-			seen[n["id"]] = now
-			changed = true
 		var item: Dictionary = n.duplicate()
 		item["unread"] = not (n["id"] in read)
-		item["seen_at"] = seen[n["id"]]
+		item["seen_at"] = int(n.get("time", seen[n["id"]]))
 		out.append(item)
-	if changed:
-		cfg.set_value("notifications", "seen_at", seen)
-		cfg.save(HUB_STATE_PATH)
+	out.sort_custom(func(a, b): return a["seen_at"] > b["seen_at"])
+	cfg.set_value("notifications", "dismissed", dismissed)
+	cfg.set_value("notifications", "read", read)
+	cfg.set_value("notifications", "seen_at", seen)
+	cfg.save(HUB_STATE_PATH)
 	return out
+
+
+# Every event that applies right now (dismissed or not). Ids are stable for
+# as long as the event lasts, so read/dismissed sticks.
+func _current_events(cfg: ConfigFile, now: int) -> Array:
+	var events := []
+
+	# Today's Daily: not started, or started and unfinished.
+	var today := DailyStateRef.today_number()
+	var day := DailyStateRef.load_day(today)
+	var results: Array = day["results"]
+	var streak: int = PlayerStats.daily_streaks()[0]
+	var played_today := not results.is_empty()
+	if not DailyStateRef.is_finished(day):
+		var body := "Five new articles. Resets in %s." % _hours_left(DailyStateRef.seconds_until_reset())
+		if played_today:
+			body = "%d of %d done. Finish before the reset." % [results.size(), DailyStateRef.ARTICLES_PER_DAY]
+		elif streak > 0:
+			body = "Play today to keep your %d-day streak going." % streak
+		events.append({"id": "daily_%d" % today, "icon": "calendar",
+			"title": "Daily #%d is ready" % today, "body": body})
+	# Streak about to end (a separate id so it badges again near the reset).
+	var left := DailyStateRef.seconds_until_reset()
+	if streak > 0 and not played_today and left <= STREAK_WARNING_SECONDS:
+		events.append({"id": "streak_%d" % today, "icon": "calendar",
+			"title": "Your Daily streak ends soon",
+			"body": "%s left to keep your %d-day streak." % [_hours_left(left), streak]})
+
+	# Latest Ranked result.
+	for m in PlayerStats.matches:
+		if not m.get("ranked", false):
+			continue
+		var t := int(m["time"])
+		if now - t <= RANKED_NOTICE_SECONDS:
+			var delta := int(m["delta"])
+			events.append({"id": "ranked_%d" % t, "icon": "trophy", "time": t,
+				"title": "Rating %s%d: now %d" % ["+" if delta >= 0 else "", delta, int(m["rating"])],
+				"body": "%s vs %s." % ["Won" if m["outcome"] == "won" else "Lost", m["opponent"]]})
+		break
+
+	# Official playlists added by an update. The first time this runs every
+	# playlist is just remembered, so new players don't get a pile of these.
+	var official := Global.get_official_playlist_ids()
+	var known: Dictionary = cfg.get_value("playlists", "known", {})
+	var first_run := not cfg.has_section_key("playlists", "known")
+	for id in official:
+		if not known.has(id):
+			known[id] = 0 if first_run else now
+	cfg.set_value("playlists", "known", known)
+	for id in official:
+		var added := int(known[id])
+		if added > 0 and now - added <= NEW_PLAYLIST_SECONDS:
+			events.append({"id": "playlist_%s" % id, "icon": "list", "time": added,
+				"title": "New playlist: %s" % Global.get_playlist_display_name(id),
+				"body": "Pick it in Single Player or browse it under Playlists."})
+
+	# Hasn't played anything yet.
+	if int(PlayerStats.totals["runs"]) == 0 and int(PlayerStats.totals["matches"]) == 0 \
+			and PlayerStats.daily_days().is_empty():
+		events.append({"id": "tutorial", "icon": "sparkles", "title": "New to Cite?",
+			"body": "The Tutorial (in Settings) shows how a round works in a minute."})
+	return events
+
+
+static func _hours_left(seconds: int) -> String:
+	if seconds < 3600:
+		return "%dm" % maxi(1, seconds / 60)
+	return "%dh" % (seconds / 3600)
 
 
 func _mark_notifications(key: String, ids: Array) -> void:
@@ -402,13 +475,34 @@ func _close_notifications() -> void:
 		notifications_layer = null
 
 
-# Esc closes the notifications dropdown before anything else (this runs
-# before Global's Esc-presses-Back handler).
+# F12 opens the developer tools (debug builds only, see dev/dev_tools.gd).
+# Esc (this runs before Global's Esc-presses-Back handler): closes the
+# notifications dropdown first; with a modal open (Settings included) or the
+# matchmaking overlay up, Global presses its close/Cancel button; otherwise it
+# opens Settings. Screen "Back to Play" buttons aren't in the "back_button"
+# group, so Esc never leaves a menu screen.
 func _input(event: InputEvent) -> void:
-	if notifications_layer and event is InputEventKey and event.pressed \
-			and not event.is_echo() and event.keycode == KEY_ESCAPE:
+	if not (event is InputEventKey and event.pressed and not event.is_echo()):
+		return
+	# F12: developer tools, only where they exist (see Global.dev_tools_available).
+	if event.keycode == KEY_F12:
+		if Global.dev_tools_available() and not _modal_open() and not notifications_layer:
+			get_viewport().set_input_as_handled()
+			load(Global.DEV_TOOLS).open(self)
+		return
+	if event.keycode != KEY_ESCAPE:
+		return
+	if notifications_layer:
 		get_viewport().set_input_as_handled()
 		_close_notifications()
+		return
+	if _modal_open() or get_tree().paused:
+		return
+	for button in get_tree().get_nodes_in_group("back_button"):
+		if button is BaseButton and button.is_visible_in_tree() and not button.disabled:
+			return  # e.g. matchmaking Cancel - Global presses it
+	get_viewport().set_input_as_handled()
+	_open_settings()
 
 
 # --- Navigation -------------------------------------------------------------
@@ -631,8 +725,7 @@ func _side_panel(title: String, note := "", variation := "SidePanel") -> VBoxCon
 
 
 # Segmented toggle (e.g. Normal | Hardcore). on_select gets the index.
-# disabled: indices shown but not clickable (tooltip "Coming soon").
-func _segmented(options: Array, selected: int, on_select: Callable, disabled := []) -> Control:
+func _segmented(options: Array, selected: int, on_select: Callable) -> Control:
 	var bar := PanelContainer.new()
 	bar.theme_type_variation = "SegBar"
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -648,9 +741,6 @@ func _segmented(options: Array, selected: int, on_select: Callable, disabled := 
 		b.button_group = group
 		b.button_pressed = i == selected
 		b.focus_mode = Control.FOCUS_NONE
-		if i in disabled:
-			b.disabled = true
-			b.tooltip_text = "Coming soon"
 		var index: int = i
 		b.pressed.connect(func():
 			SoundManagerScript.play_random_click("SFX")
@@ -753,76 +843,7 @@ func _open_settings() -> void:
 	quit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(quit)
 	box.add_child(row)
-
-	# Developer tools (were in the old menu's settings).
-	var dev := HBoxContainer.new()
-	dev.add_theme_constant_override("separation", 4)
-	dev.alignment = BoxContainer.ALIGNMENT_CENTER
-	dev.add_child(_label("Dev:", "SmallMuted"))
-	for entry in [["Dummy Ranked", func(): _dev_dummy_matchmaking("Ranked")],
-			["Dummy Quick Play", func(): _dev_dummy_matchmaking("Quick Play")],
-			["Test Article", func(): get_tree().change_scene_to_file("res://scenes/ArticleTester.tscn")],
-			["Test MP ID", func(): get_tree().change_scene_to_file("res://scenes/MultiplayerIdTester.tscn")],
-			["Reset Daily", _dev_reset_daily],
-			["Official Daily", _dev_official_daily]]:
-		var b := _button(entry[0], "TextLink", entry[1])
-		b.add_theme_font_size_override("font_size", 12)
-		dev.add_child(b)
-	box.add_child(dev)
-	# Dev: which mode takes the hub's top spot (normally decided by how many
-	# people are online - see hub.gd _wants_sp_first).
-	var layout_row := HBoxContainer.new()
-	layout_row.add_theme_constant_override("separation", 8)
-	layout_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	layout_row.add_child(_label("Dev: hub top", "SmallMuted"))
-	var layout := OptionButton.new()
-	layout.focus_mode = Control.FOCUS_NONE
-	layout.add_item("Auto (%d+ online = Ranked)" % Global.HUB_SP_FIRST_BELOW, Global.HubLayout.AUTO)
-	layout.add_item("Single Player", Global.HubLayout.SINGLE_PLAYER)
-	layout.add_item("Ranked", Global.HubLayout.MULTIPLAYER)
-	layout.select(layout.get_item_index(Global.hub_layout_override))
-	layout.item_selected.connect(func(i: int):
-		Global.hub_layout_override = layout.get_item_id(i)
-		if scene_file_path == Global.MENU_SCENE:
-			get_tree().reload_current_scene())
-	layout_row.add_child(layout)
-	box.add_child(layout_row)
-	# Dev: how the bot in Dummy Ranked / Quick Play plays.
-	var bot_row := HBoxContainer.new()
-	bot_row.add_theme_constant_override("separation", 8)
-	bot_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	bot_row.add_child(_label("Dev: bot", "SmallMuted"))
-	var bot := OptionButton.new()
-	bot.focus_mode = Control.FOCUS_NONE
-	bot.add_item("Passive (never guesses)", Global.DummyBotLevel.PASSIVE)
-	bot.add_item("Normal", Global.DummyBotLevel.NORMAL)
-	bot.add_item("Fast", Global.DummyBotLevel.FAST)
-	bot.select(bot.get_item_index(Global.dummy_bot_level))
-	bot.item_selected.connect(func(i: int): Global.dummy_bot_level = bot.get_item_id(i))
-	bot_row.add_child(bot)
-	box.add_child(bot_row)
 	_add_modal_close(box)
-
-
-# Dev: the hub's matchmaking overlay (Ranked or Quick Play), but against
-# DummyOpponent with no Steam involved - see Matchmaker._run_dummy.
-func _dev_dummy_matchmaking(mode_label: String) -> void:
-	Global.pending_dummy_matchmaking = mode_label
-	get_tree().change_scene_to_file(HUB_SCENE)
-
-
-# Dev: fresh local set of 5 for today (no leaderboard - see DailyState.reset_day).
-func _dev_reset_daily() -> void:
-	var DailyState = load("res://ui/daily/daily_state.gd")
-	DailyState.reset_day(DailyState.today_number())
-	get_tree().reload_current_scene()
-
-
-# Dev: wipe today's attempt and go back to the official (online) set.
-func _dev_official_daily() -> void:
-	var DailyState = load("res://ui/daily/daily_state.gd")
-	DailyState.official_day(DailyState.today_number())
-	get_tree().reload_current_scene()
 
 
 func _volume_slider(title: String, value: float, apply: Callable) -> Control:

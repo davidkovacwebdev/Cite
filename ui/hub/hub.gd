@@ -15,7 +15,6 @@ const HERO_HEIGHT := 226
 # Steam friends list: rebuilt at most this often when statuses change.
 const FRIENDS_REFRESH_SECONDS := 2.0
 
-# Mockup placeholders.
 const DailyState := preload("res://ui/daily/daily_state.gd")
 const DAILY_SCENE := "res://ui/daily/daily.tscn"
 const ArticleHighlight := preload("res://ui/hub/article_highlight.gd")
@@ -44,6 +43,8 @@ var friends_scroll: ScrollContainer
 var friends_refresh_timer: Timer
 var left_column: VBoxContainer
 var sp_first := false
+var lists_desc: Label  # Playlists card (counts update when Workshop playlists load)
+var lists_spotlight: Label
 
 
 func _ready() -> void:
@@ -129,7 +130,7 @@ func _fill_left_column() -> void:
 
 	# Daily Challenge -> ui/daily.
 	var daily := _mode_card("calendar", "Daily Challenge",
-		"5 official articles, same for everyone. One attempt per day.")
+		"%d official articles, same for everyone. One attempt per day." % DailyState.ARTICLES_PER_DAY)
 	daily_meta = _label("", "SmallLabel")
 	daily.add_child(daily_meta)
 	reset_label = _label("Resets in --:--:--", "SmallLabel")
@@ -165,15 +166,70 @@ func _fill_left_column() -> void:
 	else:
 		# Single Player -> the current (non-Legacy) single player.
 		var single := _mode_card("user", "Single Player", "Your deck, article after article. How far can you get?")
-		single.add_child(_label("Best: 23 rounds · #1,204", "SmallLabel"))
+		var best := _label("", "SmallLabel")
+		best.visible = false
+		single.add_child(best)
 		single.add_child(_button("Start Run", "", _open_single_player))
 		modes.add_child(single.get_parent())
+		_load_best_run(func(run: Dictionary):
+			if run.is_empty():
+				return
+			best.text = "Best: %d articles · #%s" % [run["score"], _thousands(run["rank"])]
+			best.tooltip_text = "%s leaderboard" % Global.get_playlist_display_name(run["playlist"])
+			best.mouse_filter = Control.MOUSE_FILTER_PASS
+			best.visible = true)
 
-	# Playlists -> community playlists screen (next step).
-	var lists := _mode_card("list", "Playlists", "Play 12k+ community playlists or build your own.")
-	lists.add_child(_label("Featured: 90s Bangers", "SmallLabel"))
+	# Playlists -> the Playlists screen.
+	var lists := _mode_card("list", "Playlists", "")
+	lists_desc = lists.get_child(2)  # _mode_card's description label
+	lists_spotlight = _label("", "SmallLabel")
+	lists.add_child(lists_spotlight)
 	lists.add_child(_button("Browse", "", _on_nav_playlists))
 	modes.add_child(lists.get_parent())
+	_refresh_playlists_card()
+	if not Workshop.community_playlists_changed.is_connected(_refresh_playlists_card):
+		Workshop.community_playlists_changed.connect(_refresh_playlists_card)
+
+
+func _refresh_playlists_card() -> void:
+	if is_instance_valid(lists_desc):
+		lists_desc.text = _playlists_blurb()
+		lists_spotlight.text = _playlist_spotlight()
+
+
+# "9 official and 41 community playlists, or build your own." (real counts).
+func _playlists_blurb() -> String:
+	var official := Global.get_official_playlist_ids().size()
+	var community: int = Workshop.community_playlists.size()
+	if community == 0:
+		return "%d official playlists, or build your own and share it on the Workshop." % official
+	return "%d official and %s community playlists, or build your own." % [official, _thousands(community)]
+
+
+# The newest community playlist, else one official playlist that changes daily.
+func _playlist_spotlight() -> String:
+	var newest := ""
+	var newest_time := -1
+	for key in Workshop.community_playlists:
+		var info: Dictionary = Workshop.community_playlists[key]
+		if int(info.get("time_updated", 0)) > newest_time:
+			newest_time = int(info.get("time_updated", 0))
+			newest = String(info.get("title", ""))
+	if newest != "":
+		return "Newest: %s" % newest
+	var official := Global.get_official_playlist_ids()
+	if official.is_empty():
+		return ""
+	var pick: String = official[DailyState.today_number() % official.size()]
+	return "Today's pick: %s" % Global.get_playlist_display_name(pick)
+
+
+# Calls on_loaded with Leaderboards.best_normal_run()'s answer, if this hub
+# is still open by then.
+func _load_best_run(on_loaded: Callable) -> void:
+	var run: Dictionary = await Leaderboards.best_normal_run()
+	if is_inside_tree():
+		on_loaded.call(run)
 
 
 # Hero frame (panel, corner glow, padding); returns [panel, content row].
@@ -258,10 +314,18 @@ func _hero_cta(row: HBoxContainer) -> VBoxContainer:
 func _build_sp_hero() -> Control:
 	var frame := _hero_frame()
 	var row: HBoxContainer = frame[1]
-	@warning_ignore("return_value_discarded")
-	_hero_info(row, "SINGLE PLAYER", "How far can you get?",
+	var stat := _hero_info(row, "SINGLE PLAYER", "How far can you get?",
 		"Your deck, article after article. Pick a playlist, or go Hardcore.",
-		["23", "Best run", "rounds · #1,204 on the leaderboard"])
+		["-", "Best run", "Loading..." if Steam.loggedOn() else "Leaderboards need Steam running"])
+	var number: Label = stat[0]
+	var stat_note: Label = stat[1]
+	if Steam.loggedOn():
+		_load_best_run(func(run: Dictionary):
+			if run.is_empty():
+				stat_note.text = "Finish a run on one playlist to get ranked"
+				return
+			number.text = str(run["score"])
+			stat_note.text = "articles · #%s on %s" % [_thousands(run["rank"]), Global.get_playlist_display_name(run["playlist"])])
 	var cta := _hero_cta(row)
 	var start := _button("Start Run", "CtaButton", _open_single_player)
 	start.custom_minimum_size.y = 48

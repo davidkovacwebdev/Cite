@@ -39,7 +39,6 @@ func _ready() -> void:
 	body.add_child(right)
 	right.add_child(_build_details())
 	var back := _button("Back to Play", "GhostButton", _on_nav_play)
-	back.add_to_group("back_button")  # Esc presses it (Global._input)
 	right.add_child(back)
 
 	_reload_playlists()

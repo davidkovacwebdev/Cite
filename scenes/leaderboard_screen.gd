@@ -139,7 +139,6 @@ func _build_side() -> Control:
 	right.add_child(rules_box.get_parent())
 
 	var back := _button("Back to Play", "GhostButton", _on_nav_play)
-	back.add_to_group("back_button")
 	right.add_child(back)
 	return right
 

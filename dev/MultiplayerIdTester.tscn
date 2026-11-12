@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scenes/multiplayer_id_tester.gd" id="1_idtest"]
+[ext_resource type="Script" path="res://dev/multiplayer_id_tester.gd" id="1_idtest"]
 
 [node name="MultiplayerIdTester" type="Control"]
 layout_mode = 3

@@ -54,7 +54,6 @@ func _ready() -> void:
 	right.add_child(_build_daily())
 	right.add_child(_build_playlists())
 	var back := _button("Back to Play", "GhostButton", _on_nav_play)
-	back.add_to_group("back_button")
 	right.add_child(back)
 
 	Ratings.changed.connect(_refresh_rating)

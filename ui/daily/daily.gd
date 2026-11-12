@@ -170,7 +170,7 @@ func _build(column: VBoxContainer) -> void:
 
 	quit_button = _button("‹  Quit", "GhostButton", _on_quit_pressed)
 	quit_button.custom_minimum_size.x = 160
-	# Not in the "back_button" group: Esc opens Settings here (see _input).
+	# Not in the "back_button" group: Esc opens Settings (hub_screen._input).
 	header.add_child(quit_button)
 
 	var spacer := Control.new()
@@ -632,18 +632,6 @@ func _next_article() -> void:
 		_show_summary()
 	else:
 		_load_next_article()
-
-
-# Esc: closes an open popup (Global presses its close button), otherwise
-# opens Settings. The timer keeps running, like in a match.
-func _input(event: InputEvent) -> void:
-	super(event)
-	if get_viewport().is_input_handled():
-		return
-	if event is InputEventKey and event.pressed and not event.is_echo() \
-			and event.keycode == KEY_ESCAPE and not _modal_open():
-		get_viewport().set_input_as_handled()
-		_open_settings()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

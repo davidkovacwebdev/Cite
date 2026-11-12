@@ -32,6 +32,7 @@ const HARDCORE_TIERS := [
 var _handles := {}  # leaderboard name -> Steam handle
 var _busy := false
 var _reply = null
+var _best_normal_cache = null  # best_normal_run()'s answer this session; null = ask Steam
 
 
 func _ready() -> void:
@@ -91,6 +92,31 @@ func own_entry(board_name: String) -> Dictionary:
 				result["entry"] = reply[2][0].duplicate(true)
 	_busy = false
 	return result
+
+
+# The player's best Normal run across the official playlists' boards (await
+# it): {"playlist", "score" (articles), "rank" (global)}, or {} with no runs
+# or no Steam. Cached once every board answered; an upload clears it.
+func best_normal_run() -> Dictionary:
+	if _best_normal_cache != null:
+		return _best_normal_cache
+	if not Steam.loggedOn():
+		return {}
+	var best := {}
+	var all_answered := true
+	for playlist in Global.get_official_playlist_ids():
+		var result: Dictionary = await own_entry(normal_board_name(playlist))
+		if not result["ok"]:
+			all_answered = false
+		var entry: Dictionary = result["entry"]
+		if entry.is_empty():
+			continue
+		var score := int(entry.get("score", 0))
+		if best.is_empty() or score > int(best["score"]):
+			best = {"playlist": playlist, "score": score, "rank": int(entry.get("global_rank", 0))}
+	if all_answered:
+		_best_normal_cache = best
+	return best
 
 
 static func normal_board_name(playlist: String) -> String:
@@ -174,6 +200,8 @@ func _upload(board_name: String, score: int, guesses: int, details := PackedInt3
 		Steam.uploadLeaderboardScore(score, keep_best, details, handle)
 		var reply = await _wait_reply()
 		ok = reply != null and bool(reply[0])
+	if board_name.begins_with(NORMAL_PREFIX):
+		_best_normal_cache = null
 	_busy = false
 	return ok
 

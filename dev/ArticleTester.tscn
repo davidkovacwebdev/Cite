@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scenes/article_tester.gd" id="1_atest"]
+[ext_resource type="Script" path="res://dev/article_tester.gd" id="1_atest"]
 
 [node name="ArticleTester" type="Control"]
 layout_mode = 3

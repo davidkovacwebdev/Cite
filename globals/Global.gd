@@ -198,6 +198,15 @@ const HUB_SP_FIRST_BELOW := 100
 enum HubLayout { AUTO, SINGLE_PLAYER, MULTIPLAYER }
 var last_player_count: int = -1
 var hub_layout_override: int = HubLayout.AUTO
+
+# Developer tools (F12 on the hub, Legacy's test buttons). res://dev/ is left
+# out of every export preset, so shipped builds don't have it at all; the
+# debug-build check keeps it off even in an export that forgot the filter.
+const DEV_TOOLS := "res://dev/dev_tools.gd"
+
+
+func dev_tools_available() -> bool:
+	return OS.is_debug_build() and ResourceLoader.exists(DEV_TOOLS)
 # Room code typed into the hub's Private Match card (lobby entry "join").
 var pending_lobby_code: String = ""
 # Where "back to the menu" goes: the new hub (Main.tscn is kept, unused).

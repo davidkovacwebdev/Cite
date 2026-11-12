@@ -62,6 +62,9 @@ func _ready() -> void:
 	$CenterContainer/VBoxContainer/Settings.pressed.connect(_on_settings_pressed)
 	$CenterContainer/VBoxContainer/TestArticle.pressed.connect(_on_test_article_pressed)
 	$CenterContainer/VBoxContainer/TestMultiplayerId.pressed.connect(_on_test_multiplayer_id_pressed)
+	# Dev testers only exist in debug builds with res://dev/ (Global.dev_tools_available).
+	$CenterContainer/VBoxContainer/TestArticle.visible = false
+	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = false
 	$CenterContainer/VBoxContainer/Fullscreen.toggled.connect(_on_fullscreen_toggled)
 	$CenterContainer/VBoxContainer/Exit.pressed.connect(_on_exit_pressed)
 	$CenterContainer/VBoxContainer/NormalMode.pressed.connect(_on_normal_mode_pressed)
@@ -137,6 +140,8 @@ func _show_menu_items(names: Array) -> void:
 
 # Show main menu (Game, Credits, Tutorial, Settings, Exit)
 func show_main_menu():
+	$CenterContainer/VBoxContainer/TestArticle.visible = false
+	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = false
 	_show_menu_items(["Play", "Credits", "Tutorial", "Settings", "Exit"])
 
 
@@ -256,8 +261,8 @@ func _on_settings_pressed():
 	$CenterContainer/VBoxContainer/MusicVolume.visible = true
 	$CenterContainer/VBoxContainer/Back.visible = true
 	$CenterContainer/VBoxContainer/Fullscreen.visible = true
-	$CenterContainer/VBoxContainer/TestArticle.visible = true
-	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = true
+	$CenterContainer/VBoxContainer/TestArticle.visible = Global.dev_tools_available()
+	$CenterContainer/VBoxContainer/TestMultiplayerId.visible = Global.dev_tools_available()
 
 	$CenterContainer/VBoxContainer/Play.visible = false
 	$CenterContainer/VBoxContainer/Credits.visible = false
@@ -280,11 +285,11 @@ func _on_tutorial_pressed():
 
 func _on_test_article_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
-	get_tree().change_scene_to_file("res://scenes/ArticleTester.tscn")
+	get_tree().change_scene_to_file("res://dev/ArticleTester.tscn")
 
 func _on_test_multiplayer_id_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
-	get_tree().change_scene_to_file("res://scenes/MultiplayerIdTester.tscn")
+	get_tree().change_scene_to_file("res://dev/MultiplayerIdTester.tscn")
 
 func _on_exit_pressed():
 	SoundManagerScript.play_random_sound_from_folder_with_pitch("res://assets/sounds/sfx/click","SFX")
