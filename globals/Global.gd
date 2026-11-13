@@ -546,6 +546,22 @@ func is_guessable_char(c: String) -> bool:
 	return (f >= "a" and f <= "z") or (f >= "A" and f <= "Z") or (f >= "0" and f <= "9")
 
 
+# A submitted guess that can't be a real attempt - fewer than 2 letters or
+# digits ("/", "a", "?!"). The boards check the answer first (so a one-
+# character title still counts), then ignore these instead of costing HP.
+# Legacy (board.gd) doesn't use it.
+const MIN_GUESS_CHARS := 2
+
+func is_gibberish_guess(typed: String) -> bool:
+	var count := 0
+	for c in typed:
+		if is_guessable_char(c):
+			count += 1
+			if count >= MIN_GUESS_CHARS:
+				return false
+	return true
+
+
 # Used to accept/reject a player's title guess: a flat 85% similarity ratio
 # for any length, so small typos are forgiven.
 # The match-style look (dark background, minimal bars, dark cards) - used by

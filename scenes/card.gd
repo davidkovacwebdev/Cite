@@ -435,6 +435,16 @@ func set_action_type():
 			return action_type
 
 
+# Cards expand to share the hand's width (size_flags_horizontal = fill), so
+# with few cards a card's Control rect is much wider than the card drawn at
+# its left edge - hovering/clicking empty hand space would hit it. Outside
+# Legacy, only the drawn card counts.
+func _has_point(point: Vector2) -> bool:
+	if not Global.uses_modern_ui():
+		return Rect2(Vector2.ZERO, size).has_point(point)
+	return Rect2(Vector2.ZERO, $MinimalBackground.size).has_point(point)
+
+
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if get_parent() is HBoxContainer:

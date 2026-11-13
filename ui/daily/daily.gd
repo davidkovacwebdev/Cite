@@ -571,6 +571,8 @@ func _submit_guess() -> void:
 	if _is_correct(typed):
 		_finish_article(true)
 		return
+	if Global.is_gibberish_guess(typed):
+		return  # a stray "/" or single letter - not counted as a wrong guess
 	wrong += 1
 	PlayerStats.record_wrong()
 	guess_locked = true

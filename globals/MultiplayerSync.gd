@@ -244,8 +244,8 @@ func send_vitals(hp: int, max_hp: int, mana: int, max_mana: int) -> void:
 	_send_raw({"type": "vitals", "hp": hp, "max_hp": max_hp, "mana": mana, "max_mana": max_mana})
 
 
-# guess is the text the player typed (only sent for a correct guess) - the
-# loser's board shows it in the answer box.
+# guess is the text the player typed - a correct one shows in the loser's
+# answer box; both kinds go in the end screen's per-article guess list.
 func send_guess_result(correct: bool, damage: int = 0, guess: String = "") -> void:
 	if Global.is_dummy_opponent:
 		# There's no real peer to message in dummy mode - a correct guess

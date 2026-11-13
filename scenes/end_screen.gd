@@ -161,7 +161,7 @@ func _build_match_summary() -> void:
 	# The match can end mid-article (wrong guesses, or someone leaving).
 	var current: String = Global.run.current_round.article_title
 	if not current.is_empty() and (articles.is_empty() or articles[-1]["title"] != current):
-		articles.append({"title": current, "result": "unfinished", "damage": 0})
+		articles.append({"title": current, "result": "unfinished", "damage": 0, "round": Global.run.round_number})
 	if articles.is_empty():
 		rows.add_child(_summary_label("No articles were finished.", "MutedLabel"))
 	for i in articles.size():
@@ -217,7 +217,111 @@ func _article_row(number: int, entry: Dictionary, style) -> Control:
 	var outcome_label: Label = row.get_child(2)
 	outcome_label.add_theme_color_override("font_color", color)
 	panel.add_child(row)
+	# Hover: both players' guesses on this article.
+	if entry.has("round"):
+		panel.mouse_filter = Control.MOUSE_FILTER_PASS
+		panel.mouse_entered.connect(func():
+			panel.theme_type_variation = "TableRowHover"
+			_show_guesses_popup(panel, entry))
+		panel.mouse_exited.connect(func():
+			panel.theme_type_variation = "TableRow"
+			_hide_guesses_popup())
+		panel.tree_exiting.connect(_hide_guesses_popup)
 	return panel
+
+
+# --- Per-article guesses popup ----------------------------------------------
+
+const GUESSES_POPUP_WIDTH := 210  # fits in the margin beside the 680px table at 1152 wide
+const MAX_GUESSES_SHOWN := 5
+var guesses_popup: CanvasLayer
+
+
+func _show_guesses_popup(row: Control, entry: Dictionary) -> void:
+	_hide_guesses_popup()
+	var style := preload("res://ui/match/match_style.gd")
+	var guesses: Array = Global.run.guesses_for_round(int(entry["round"]))
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	add_child(layer)
+	guesses_popup = layer
+	var panel := PanelContainer.new()
+	panel.theme = style.HUB_THEME
+	panel.theme_type_variation = "DropdownPanel"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.custom_minimum_size.x = GUESSES_POPUP_WIDTH
+	layer.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+	var title := _summary_label(String(entry.get("title", "?")), "NameLabel")
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	title.custom_minimum_size.x = 10
+	box.add_child(title)
+	var opponent := Global.multiplayer_opponent_name if not Global.multiplayer_opponent_name.is_empty() else "Opponent"
+	box.add_child(_guess_column("You", guesses.filter(func(g): return g["who"] == "you"), style, false))
+	box.add_child(_guess_column(opponent, guesses.filter(func(g): return g["who"] == "opponent"), style,
+		Global.is_player_muted(Global.multiplayer_opponent_id)))
+	for c in [box] + box.get_children():
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Beside the summary table, level with the row, kept on screen - placed
+	# once it has laid out, so its real height is known.
+	panel.visible = false
+	await get_tree().process_frame
+	if not is_instance_valid(panel) or not is_instance_valid(row):
+		return
+	panel.reset_size()
+	panel.visible = true
+	var r := row.get_global_rect()
+	var screen := get_viewport_rect().size
+	var pos := Vector2(r.end.x + 12, r.get_center().y - panel.size.y / 2.0)
+	if pos.x + panel.size.x > screen.x - 8:
+		pos.x = r.position.x - panel.size.x - 12
+	pos.x = clampf(pos.x, 8, maxf(8.0, screen.x - panel.size.x - 8))
+	pos.y = clampf(pos.y, 8, maxf(8.0, screen.y - panel.size.y - 8))
+	panel.position = pos
+
+
+# "You" / opponent name, then each guess in order: wrong ones muted and
+# struck through, the correct one green. Muted players' texts stay hidden.
+func _guess_column(who: String, guesses: Array, style, hide_text: bool) -> Control:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	var name_label := _summary_label(who.to_upper(), "Eyebrow")
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	column.add_child(name_label)
+	if guesses.is_empty():
+		column.add_child(_summary_label("No guesses", "SmallMuted"))
+		return column
+	var shown := guesses.slice(-MAX_GUESSES_SHOWN) if guesses.size() > MAX_GUESSES_SHOWN else guesses
+	if shown.size() < guesses.size():
+		column.add_child(_summary_label("... %d earlier" % (guesses.size() - shown.size()), "SmallMuted"))
+	for g in shown:
+		var text := String(g["text"])
+		var correct: bool = g["correct"]
+		var label := _summary_label("", "SmallLabel")
+		label.custom_minimum_size.x = 10
+		label.clip_text = true
+		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		if correct and text.is_empty():
+			label.text = "✓ Completed with Letter Reveal"
+		elif text.is_empty():
+			label.text = "× (wrong guess)"
+		elif hide_text:
+			label.text = ("✓ " if correct else "× ") + "(hidden - muted)"
+		else:
+			label.text = ("✓ " if correct else "× ") + text
+		label.add_theme_color_override("font_color", style.color("added") if correct else style.color("muted"))
+		column.add_child(label)
+	return column
+
+
+func _hide_guesses_popup() -> void:
+	if is_instance_valid(guesses_popup):
+		guesses_popup.queue_free()
+	guesses_popup = null
 
 
 func _summary_row(cells: Array, variation: String) -> HBoxContainer:

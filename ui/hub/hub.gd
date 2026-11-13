@@ -10,7 +10,7 @@ extends "res://ui/hub/hub_screen.gd"
 # only a small link in the Single Player popup.
 
 const Matchmaker := preload("res://ui/hub/matchmaker.gd")
-const HERO_HEIGHT := 200  # content needs ~197; leaves room for the Ranked notices
+const HERO_HEIGHT := 226
 
 # Steam friends list: rebuilt at most this often when statuses change.
 const FRIENDS_REFRESH_SECONDS := 2.0
@@ -122,8 +122,6 @@ func _fill_left_column() -> void:
 		c.queue_free()
 	var left := left_column
 	left.add_child(_build_sp_hero() if sp_first else _build_hero())
-	if not sp_first:
-		left.add_child(_ranked_notices())  # right under the Ranked hero
 
 	var modes := HBoxContainer.new()
 	modes.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -161,8 +159,12 @@ func _fill_left_column() -> void:
 	if sp_first:
 		# Ranked moves down into the cards, as the first one.
 		var duel := _mode_card("users", "Ranked Duels", "1v1, first correct guess deals the damage. All articles are random picks from every official playlist.")
-		duel.add_child(_button("Find Match", "", func(): _start_matchmaking("Ranked")))
-		duel.add_child(_button("Quick Play · unranked", "OutlineButton", func(): _start_matchmaking("Quick Play")))
+		var duel_find := _button("Find Match", "", func(): _start_matchmaking("Ranked"))
+		_attach_hover_notes(duel_find, true)
+		duel.add_child(duel_find)
+		var duel_quick := _button("Quick Play · unranked", "OutlineButton", func(): _start_matchmaking("Quick Play"))
+		_attach_hover_notes(duel_quick, false)
+		duel.add_child(duel_quick)
 		modes.add_child(duel.get_parent())
 		modes.move_child(duel.get_parent(), 0)  # first card, leftmost
 	else:
@@ -188,8 +190,6 @@ func _fill_left_column() -> void:
 	lists.add_child(lists_spotlight)
 	lists.add_child(_button("Browse", "", _on_nav_playlists))
 	modes.add_child(lists.get_parent())
-	if sp_first:
-		left.add_child(_ranked_notices())  # under the cards (Ranked Duels is the first)
 	_refresh_playlists_card()
 	if not Workshop.community_playlists_changed.is_connected(_refresh_playlists_card):
 		Workshop.community_playlists_changed.connect(_refresh_playlists_card)
@@ -351,9 +351,12 @@ func _build_hero() -> Control:
 	_watch_rating(stat[1], "")  # status line, see _refresh_ratings
 	var cta := _hero_cta(row)
 	var find := _button("Find Match", "CtaButton", func(): _start_matchmaking("Ranked"))
+	_attach_hover_notes(find, true)
 	find.custom_minimum_size.y = 48
 	cta.add_child(find)
-	cta.add_child(_button("Quick Play  · unranked", "", func(): _start_matchmaking("Quick Play")))
+	var quick := _button("Quick Play  · unranked", "", func(): _start_matchmaking("Quick Play"))
+	_attach_hover_notes(quick, false)
+	cta.add_child(quick)
 	# Ranked and Quick Play always use every official playlist; community
 	# playlists are played in private rooms.
 	var wait := _label("Random articles from all official playlists", "SmallMuted")
@@ -362,17 +365,57 @@ func _build_hero() -> Control:
 	return frame[0]
 
 
-# Under the Ranked hero: no googling + the pre-season note, side by side.
-func _ranked_notices() -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	var fair := _notice(FAIR_PLAY_TEXT, "accent", true)
-	fair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(fair)
-	var season := _notice(PRESEASON_TEXT)
-	season.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(season)
-	return row
+# Hovering Find Match / Quick Play pops up the notes under the button: no
+# googling (both), plus the pre-season note for Ranked.
+const HOVER_NOTES_WIDTH := 300
+var hover_notes: CanvasLayer  # the open popup, null when none
+
+
+func _attach_hover_notes(button: Button, ranked: bool) -> void:
+	button.mouse_entered.connect(func(): _show_hover_notes(button, ranked))
+	button.mouse_exited.connect(_hide_hover_notes)
+	button.pressed.connect(_hide_hover_notes)
+	button.tree_exiting.connect(_hide_hover_notes)
+
+
+func _show_hover_notes(button: Button, ranked: bool) -> void:
+	_hide_hover_notes()
+	if _modal_open():
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	add_child(layer)
+	hover_notes = layer
+	var panel := PanelContainer.new()
+	panel.theme = theme
+	panel.theme_type_variation = "DropdownPanel"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.custom_minimum_size.x = HOVER_NOTES_WIDTH
+	layer.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(box)
+	box.add_child(_notice(FAIR_PLAY_TEXT, "accent", true))
+	if ranked:
+		box.add_child(_notice(PRESEASON_TEXT))
+	for c in [box] + box.get_children():
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Under the button, centred on it, kept on screen.
+	panel.reset_size()
+	var r := button.get_global_rect()
+	var pos := Vector2(r.get_center().x - HOVER_NOTES_WIDTH / 2.0, r.end.y + 6)
+	var screen := get_viewport_rect().size
+	pos.x = clampf(pos.x, 8, screen.x - HOVER_NOTES_WIDTH - 8)
+	if pos.y + panel.size.y > screen.y - 8:
+		pos.y = r.position.y - panel.size.y - 6  # no room below: above it
+	panel.position = pos
+
+
+func _hide_hover_notes() -> void:
+	if is_instance_valid(hover_notes):
+		hover_notes.queue_free()
+	hover_notes = null
 
 
 # Returns the card's content VBox (its parent is the ModeCard panel).

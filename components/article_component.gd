@@ -435,11 +435,27 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 		if clean_word.length() > 0 and not common_words.has(clean_word):
 			cleaned_title_words.append(clean_word)
 	
+	# Legacy keeps its original censoring; everything else also blanks
+	# pronunciations anywhere in the text and plural/singular title words.
+	var thorough := Global.uses_modern_ui()
+
 	# Process each word in the extract
 	var words = article_extract.split(" ")
+	# split() gives a PackedStringArray, which the Array-typed censor
+	# functions below receive as a copy - their blanking was lost. Legacy
+	# keeps that original behaviour.
+	if thorough:
+		words = Array(words)
 
 	if censor_parens:
 		censor_pronunciation_and_alias_parens(words)
+	if thorough and censor_parens:
+		censor_pronunciations(words)
+	var title_forms := {}
+	if thorough:
+		for clean_title_word in cleaned_title_words:
+			for form in word_forms(clean_title_word):
+				title_forms[form] = true
 
 	for i in range(words.size()):
 		var original_word = words[i]
@@ -468,6 +484,14 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 					should_censor = true
 					break
 
+		# Plural/singular of a title word: "raspberries" for "Raspberry",
+		# "mice" for "Mouse" - too different as text for the checks above.
+		if not should_censor and thorough:
+			for form in word_forms(clean_lowercase_word):
+				if title_forms.has(form):
+					should_censor = true
+					break
+
 		# Pieces of a compound title word, e.g. "kilo-", "gram", "kilos" for
 		# "Kilogram" - the checks above only catch words containing the title.
 		if not should_censor:
@@ -483,6 +507,163 @@ func format_text(article_title: String, article_alt_title: String, article_extra
 			words[i] = censored
 	
 	return " ".join(words)
+
+
+const IRREGULAR_PLURALS := {
+	"mice": "mouse", "lice": "louse", "geese": "goose", "teeth": "tooth",
+	"feet": "foot", "men": "man", "women": "woman", "children": "child",
+	"people": "person", "oxen": "ox", "cacti": "cactus", "fungi": "fungus",
+	"octopi": "octopus", "alumni": "alumnus", "nuclei": "nucleus",
+	"radii": "radius", "bacteria": "bacterium", "criteria": "criterion",
+	"phenomena": "phenomenon", "data": "datum", "media": "medium",
+	"indices": "index", "vertices": "vertex", "matrices": "matrix",
+	"dice": "die", "wolves": "wolf", "knives": "knife", "leaves": "leaf",
+	"lives": "life", "wives": "wife", "halves": "half", "loaves": "loaf",
+	"thieves": "thief", "shelves": "shelf", "calves": "calf",
+}
+
+
+# Base forms a word could be the plural/possessive of, plus the word itself:
+# "raspberries" -> raspberry, "boxes" -> box, "cats'" -> cat, "mice" ->
+# mouse. Two words share a form = same word, different number. Only words of
+# 3+ letters, so "as"/"is" don't collapse into "a"/"i".
+func word_forms(word: String) -> Array:
+	var w := word.to_lower().strip_edges()
+	# Trim quotes/apostrophes/punctuation off both ends, then a possessive.
+	var trim := RegEx.new()
+	trim.compile("^[^a-z0-9]+|[^a-z0-9]+$")
+	w = trim.sub(w, "", true)
+	for suffix in ["'s", "’s"]:
+		if w.ends_with(suffix):
+			w = w.left(-suffix.length())
+	if w.length() < 3:
+		return []
+	var forms := [w]
+	if IRREGULAR_PLURALS.has(w):
+		forms.append(IRREGULAR_PLURALS[w])
+	if w.ends_with("ies") and w.length() > 4:
+		forms.append(w.left(-3) + "y")
+	if w.ends_with("ves") and w.length() > 4:
+		forms.append(w.left(-3) + "f")
+		forms.append(w.left(-3) + "fe")
+	# "-es" only after s/x/z/ch/sh/o (boxes, churches, potatoes) - "James"
+	# isn't "jam".
+	if w.ends_with("es") and w.length() > 4:
+		var stem := w.left(-2)
+		for ending in ["s", "x", "z", "ch", "sh", "o"]:
+			if stem.ends_with(ending):
+				forms.append(stem)
+				break
+	if w.ends_with("s") and not w.ends_with("ss") and w.length() > 3:
+		forms.append(w.left(-1))
+	return forms
+
+
+# Characters that only show up in IPA transcriptions, never in normal
+# English or in names (so no ø, œ, ç, æ, which do).
+const IPA_CHARS := "ˈˌːˑəɪʊʃʒθðŋɑɒɔɛɜʌɐɚɝɹɾʔʁʀɣχβɸʎɲɳɭʂʐɕʑɤɯɵɨʉɫʍɥʏɘɞɰɮ"
+const PRONUNCIATION_WORDS := ["pronounced", "pronunciation", "pronounce", "listen", "ipa"]
+
+
+func _has_ipa(word: String) -> bool:
+	for c in word:
+		if IPA_CHARS.contains(c):
+			return true
+	return false
+
+
+# A respelling syllable chain: "NYOK-ee", "WUUST-ər-shər", "rə-ZAY" - a
+# hyphenated word with an ALL-CAPS part (stressed syllable) of 2+ letters.
+func _is_respelling(word: String) -> bool:
+	var bare := word.strip_edges().lstrip("(\"'“[/").rstrip(")\"'”],.;:/")
+	if not bare.contains("-"):
+		return false
+	var has_caps := false
+	var has_lower := false
+	for part in bare.split("-", false):
+		if part.length() >= 2 and part == part.to_upper() and part != part.to_lower():
+			has_caps = true
+		elif part != part.to_upper():
+			has_lower = true
+	return has_caps and has_lower
+
+
+func _blank_word(word: String) -> String:
+	var out := ""
+	for c in word:
+		out += c if c in ["(", ")", ",", ";", ":", " "] else "_"
+	return out
+
+
+# Pronunciation help anywhere in the text, not just the lead's parentheses
+# (censor_pronunciation_and_alias_parens): respellings and IPA spell the
+# title out phonetically. Blanks
+#   - any word with IPA characters, and /slash-delimited/ transcriptions,
+#   - a whole (...) aside that holds IPA, a respelling or "pronounced",
+#   - the few words after "pronounced" outside parentheses.
+func censor_pronunciations(words: Array) -> void:
+	var n := words.size()
+	var blank := []
+	blank.resize(n)
+	blank.fill(false)
+
+	# Parenthetical asides.
+	var i := 0
+	while i < n:
+		if String(words[i]).contains("("):
+			var depth := 0
+			var j := i
+			var marked := false
+			while j < n:
+				var w: String = words[j]
+				depth += w.count("(") - w.count(")")
+				var bare := w.to_lower().lstrip("(\"'").rstrip(")\"',.;:")
+				if _has_ipa(w) or _is_respelling(w) or bare in PRONUNCIATION_WORDS:
+					marked = true
+				if depth <= 0 or j - i > 30:
+					break
+				j += 1
+			if marked:
+				for k in range(i, mini(j, n - 1) + 1):
+					blank[k] = true
+			i = j + 1
+		else:
+			i += 1
+
+	for k in n:
+		var w: String = words[k]
+		if _has_ipa(w):
+			blank[k] = true
+		# /ˈræz.bər.i/ - from the opening slash to the closing one.
+		if w.begins_with("/") and w.length() > 1:
+			for m in range(k, mini(k + 6, n)):
+				var end_word: String = words[m]
+				if (m > k or end_word.length() > 1) and end_word.rstrip(",.;:)").ends_with("/"):
+					for b in range(k, m + 1):
+						blank[b] = true
+					break
+		# "... is pronounced RAZ-bər-ee" / pronounced "Ray-zee" - the
+		# respelled or quoted words right after it (not "a pronounced effect").
+		if w.to_lower().rstrip(",.;:") in ["pronounced", "pronunciation"]:
+			var quoted := false
+			for m in range(k + 1, mini(k + 8, n)):
+				var next_word: String = words[m]
+				if next_word.to_lower() in ["as", "like", "is", "was"] and not quoted:
+					continue
+				var opens_quote := next_word.length() > 1 and next_word[0] in ["\"", "'", "“", "‘"]
+				if not (quoted or opens_quote or _is_respelling(next_word) or _has_ipa(next_word)):
+					break
+				blank[m] = true
+				if opens_quote:
+					quoted = true
+				if quoted and next_word.rstrip(",.;:)").right(1) in ["\"", "'", "”", "’"] and (m > k + 1 or next_word.length() > 2):
+					quoted = false
+				if not quoted and (next_word.ends_with(",") or next_word.ends_with(".") or next_word.ends_with(";")):
+					break
+
+	for k in n:
+		if blank[k]:
+			words[k] = _blank_word(words[k])
 
 
 # True when `word` is the leading or trailing part of `title_word` (plural

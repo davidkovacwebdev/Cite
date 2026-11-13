@@ -1,8 +1,11 @@
 extends Node
 
 # Lifetime stats for the Profile screen (ui/hub/profile_screen.gd), saved to
-# SAVE_PATH. Local only - Steam leaderboards keep the ranked/run bests that
-# other players see; this is the player's own history:
+# SAVE_PATH and mirrored to Steam Cloud (CLOUD_FILE) so the collection
+# follows the player to other PCs / reinstalls. On launch the cloud copy and
+# the local one are merged (union of collections, highest totals...), so
+# playing offline on two machines loses nothing. Steam leaderboards keep the
+# ranked/run bests that other players see; this is the player's own history:
 #   - the article collection (every article guessed right, in any mode),
 #   - recent multiplayer matches and the Ranked rating over time,
 #   - totals: guesses, accuracy, damage, runs, fastest and rarest guess.
@@ -11,6 +14,9 @@ extends Node
 
 const DailyState := preload("res://ui/daily/daily_state.gd")
 const SAVE_PATH := "user://player_stats.json"
+# Steam Remote Storage file name. Needs Steam Cloud enabled for the app in
+# Steamworks (App Admin > Steam Cloud: byte quota + file count).
+const CLOUD_FILE := "player_stats.json"
 const MAX_MATCHES := 30
 const MAX_RATING_POINTS := 200
 
@@ -180,11 +186,27 @@ func daily_streaks() -> Array:
 # --- Saving -------------------------------------------------------------------
 
 func _load() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	var local = _parse(FileAccess.get_file_as_string(SAVE_PATH)) if FileAccess.file_exists(SAVE_PATH) else null
+	var cloud = _parse(_cloud_read())
+	if local == null and cloud == null:
 		return
-	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
-	if typeof(data) != TYPE_DICTIONARY:
-		return
+	if local != null:
+		_apply(local)
+	if cloud != null:
+		_merge(cloud)
+	# Write the merged result back to both, so each side has everything.
+	if cloud != null:
+		_save()
+
+
+func _parse(text: String):
+	if text.is_empty():
+		return null
+	var data = JSON.parse_string(text)
+	return data if typeof(data) == TYPE_DICTIONARY else null
+
+
+func _apply(data: Dictionary) -> void:
 	collection = data.get("collection", {})
 	matches = data.get("matches", [])
 	rating_history = data.get("rating_history", [])
@@ -195,11 +217,79 @@ func _load() -> void:
 		totals[key] = int(saved.get(key, 0))
 
 
+# Folds another save into this one without losing anything from either.
+func _merge(other: Dictionary) -> void:
+	var other_collection: Dictionary = other.get("collection", {})
+	for key in other_collection:
+		var theirs: Dictionary = other_collection[key]
+		if not collection.has(key):
+			collection[key] = theirs
+			continue
+		var mine: Dictionary = collection[key]
+		mine["n"] = maxi(int(mine.get("n", 1)), int(theirs.get("n", 1)))
+		mine["d"] = mini(int(mine.get("d", 0)), int(theirs.get("d", 0)))
+	# Matches: union by time, newest first.
+	var by_time := {}
+	for m in matches + Array(other.get("matches", [])):
+		by_time[int(m.get("time", 0))] = m
+	var times := by_time.keys()
+	times.sort()
+	times.reverse()
+	matches = []
+	for t in times.slice(0, MAX_MATCHES):
+		matches.append(by_time[t])
+	# Rating history: union by time, oldest first.
+	var points := {}
+	for p in rating_history + Array(other.get("rating_history", [])):
+		points[int(p[0])] = p
+	var point_times := points.keys()
+	point_times.sort()
+	rating_history = []
+	for t in point_times.slice(-MAX_RATING_POINTS):
+		rating_history.append(points[t])
+	var saved: Dictionary = other.get("totals", {})
+	for key in totals:
+		totals[key] = maxi(int(totals[key]), int(saved.get(key, 0)))
+	var other_fastest: Dictionary = other.get("fastest", {})
+	if not other_fastest.is_empty() and (fastest.is_empty() or float(other_fastest["pct"]) < float(fastest["pct"])):
+		fastest = other_fastest
+	var other_rarest: Dictionary = other.get("rarest", {})
+	if not other_rarest.is_empty() and (rarest.is_empty() or float(other_rarest["views"]) < float(rarest["views"])):
+		rarest = other_rarest
+
+
 func _save() -> void:
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file == null:
-		return
-	file.store_string(JSON.stringify({
+	var text := JSON.stringify({
 		"collection": collection, "matches": matches, "rating_history": rating_history,
 		"totals": totals, "fastest": fastest, "rarest": rarest,
-	}))
+	})
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file != null:
+		file.store_string(text)
+		file.close()
+	_cloud_write(text)
+
+
+# --- Steam Cloud ------------------------------------------------------------
+
+func _cloud_available() -> bool:
+	return Steam.loggedOn() and Steam.isCloudEnabledForAccount() and Steam.isCloudEnabledForApp()
+
+
+func _cloud_read() -> String:
+	if not _cloud_available() or not Steam.fileExists(CLOUD_FILE):
+		return ""
+	var size: int = Steam.getFileSize(CLOUD_FILE)
+	if size <= 0:
+		return ""
+	var result: Dictionary = Steam.fileRead(CLOUD_FILE, size)
+	var buf = result.get("buf", PackedByteArray())
+	return buf.get_string_from_utf8() if buf is PackedByteArray else ""
+
+
+func _cloud_write(text: String) -> void:
+	if not _cloud_available():
+		return
+	var bytes := text.to_utf8_buffer()
+	if not Steam.fileWrite(CLOUD_FILE, bytes, bytes.size()):
+		push_warning("PlayerStats: Steam Cloud write failed")

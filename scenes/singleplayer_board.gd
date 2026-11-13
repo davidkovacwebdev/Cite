@@ -159,6 +159,9 @@ func _input(event):
 	guess_checking = false
 	if not is_inside_tree():
 		return
+	if Global.is_gibberish_guess(typed):
+		close_guess()  # a stray "/" or single letter - not counted, no HP lost
+		return
 	Global.run.number_of_wrong_guesses += 1
 	PlayerStats.record_wrong()
 	close_guess()

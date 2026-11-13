@@ -155,6 +155,9 @@ func _ready() -> void:
 
 	$ArticleTitle.position.y = TITLE_Y
 	_center_title()
+	# Room for the draw damage after the guess damage (_update_stake_label).
+	$StakeLabel.offset_left = 216.0
+	$StakeLabel.offset_right = 936.0
 	# The text size option can grow the title past its default width.
 	$ArticleTitle.resized.connect(_center_title)
 	$InputField.reset_border()
@@ -510,15 +513,27 @@ func _add_chat_line(sender_name: String, text: String, is_own: bool) -> void:
 # article is shorter than that or Wikipedia had nothing.
 const DIFFICULTY_AT_CHUNK := 3
 const DESCRIPTION_AT_CHUNK := 5
+# Left of the hand (Round's Hand starts at x 278), so they never overlap.
+const HINT_WIDTH := 228.0
+const HINT_BOTTOM := 604.0
+# Before it unlocks, a hint grows by up to this much and warms to this red
+# as its chunk approaches (_charge_hints).
+const HINT_CHARGE_SCALE := 0.07
+const HINT_CHARGE_COLOR := Color("#c8102e")
+# Played when a hint unlocks (reuses the Letter Reveal card's sound).
+const HINT_REVEAL_SOUND := "res://assets/sounds/sfx/multiplayer/letter-reveal.wav"
+const HINT_REVEAL_PITCH_VARIATION := 0.05
 
-var difficulty_hint: Label
-var description_hint: Label
+var difficulty_hint: PanelContainer
+var description_hint: PanelContainer
 
 
 func _build_round_hints() -> void:
 	var box := VBoxContainer.new()
-	box.position = Vector2(12, 400)
-	box.size = Vector2(250, 196)
+	box.position = Vector2(12, HINT_BOTTOM - 196)
+	box.size = Vector2(HINT_WIDTH, 196)
+	# A long description grows the stack upward, not off the bottom.
+	box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	box.alignment = BoxContainer.ALIGNMENT_END
 	box.add_theme_constant_override("separation", 8)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -526,21 +541,49 @@ func _build_round_hints() -> void:
 	var total: int = chunks.size() if chunks else 0
 	var current = Global.run.current_round
 	if current.article_daily_views >= 0 and total >= DIFFICULTY_AT_CHUNK:
-		difficulty_hint = _hint_label()
+		difficulty_hint = _hint_card()
 		box.add_child(difficulty_hint)
 	if current.article_description != "" and total >= DESCRIPTION_AT_CHUNK:
-		description_hint = _hint_label()
+		description_hint = _hint_card()
 		box.add_child(description_hint)
 	_update_round_hints()
 
 
-func _hint_label() -> Label:
-	var label := Label.new()
-	label.theme_type_variation = &"SmallMuted"
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size.x = 250
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return label
+# A paper card: small caps heading ("DIFFICULTY") over the value, with an
+# accent bar on the left once it's unlocked.
+func _hint_card() -> PanelContainer:
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.custom_minimum_size.x = HINT_WIDTH
+	var style := StyleBoxFlat.new()
+	style.bg_color = MatchStyle.color("surface")
+	style.border_color = MatchStyle.color("border")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 7
+	panel.add_theme_stylebox_override("panel", style)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 1)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(column)
+	var heading := Label.new()
+	heading.theme_type_variation = &"Eyebrow"
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(heading)
+	var value := Label.new()
+	value.add_theme_font_override("font", preload("res://ui/fonts/plex_500.tres"))
+	value.add_theme_font_size_override("font_size", 14)
+	value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(value)
+	panel.set_meta("style", style)
+	panel.set_meta("heading", heading)
+	panel.set_meta("value", value)
+	panel.set_meta("at_chunk", 0)
+	return panel
 
 
 func _update_round_hints() -> void:
@@ -554,18 +597,72 @@ func _update_round_hints() -> void:
 			current.article_description, DESCRIPTION_AT_CHUNK)
 
 
-func _set_hint(label: Label, revealed: bool, title: String, value: String, at_chunk: int) -> void:
-	var was_revealed: bool = label.get_meta("revealed", false)
+func _set_hint(panel: PanelContainer, revealed: bool, title: String, value: String, at_chunk: int) -> void:
+	var style: StyleBoxFlat = panel.get_meta("style")
+	var heading: Label = panel.get_meta("heading")
+	var value_label: Label = panel.get_meta("value")
+	var was_revealed: bool = panel.get_meta("revealed", false)
+	panel.set_meta("at_chunk", at_chunk)
+	heading.text = title.to_upper()
 	if revealed:
-		label.text = "%s: %s" % [title, value]
-		label.add_theme_color_override("font_color", MatchStyle.color("text"))
+		value_label.text = value
+		value_label.add_theme_color_override("font_color", MatchStyle.color("text"))
+		heading.add_theme_color_override("font_color", MatchStyle.color("accent"))
+		style.border_width_left = 4
+		style.border_color = MatchStyle.color("accent")
 		if not was_revealed:
-			label.set_meta("revealed", true)
-			label.modulate = MatchStyle.color("added")
-			create_tween().tween_property(label, "modulate", Color.WHITE, 0.6)
+			panel.set_meta("revealed", true)
+			_play_hint_reveal(panel, style)
 	else:
-		label.text = "%s · after %d chunks" % [title, at_chunk]
-		label.add_theme_color_override("font_color", Color(MatchStyle.color("muted"), 0.6))
+		value_label.text = "Unlocks after %d chunks" % at_chunk
+		value_label.add_theme_color_override("font_color", Color(MatchStyle.color("muted"), 0.75))
+		heading.add_theme_color_override("font_color", MatchStyle.color("muted"))
+		style.border_width_left = 1
+		style.border_color = Color(MatchStyle.color("border"), 0.35)
+
+
+# Locked hints build up toward their unlock: progress = chunks revealed (plus
+# the running reveal timer) out of the chunks needed, eased so most of the
+# growth and red lands in the last interval before it opens.
+func _charge_hints() -> void:
+	if round_advancing:
+		return
+	var frac := 0.0
+	if round_started and reveal_timer and reveal_timer.wait_time > 0.0 and reveal_timer.time_left > 0.0:
+		frac = 1.0 - reveal_timer.time_left / reveal_timer.wait_time
+	for panel in [difficulty_hint, description_hint]:
+		if not is_instance_valid(panel) or panel.get_meta("revealed", false):
+			continue
+		var at_chunk: int = panel.get_meta("at_chunk", 0)
+		if at_chunk <= 0:
+			continue
+		var t := clampf((reveal_index + frac) / float(at_chunk), 0.0, 1.0)
+		t = t * t * t
+		var style: StyleBoxFlat = panel.get_meta("style")
+		panel.pivot_offset = Vector2(0, panel.size.y)  # grows up/right, away from the edge
+		panel.scale = Vector2.ONE * (1.0 + HINT_CHARGE_SCALE * t)
+		style.bg_color = MatchStyle.color("surface").lerp(HINT_CHARGE_COLOR, 0.28 * t)
+		style.border_color = Color(MatchStyle.color("border"), 0.35).lerp(HINT_CHARGE_COLOR, t)
+		var value_label: Label = panel.get_meta("value")
+		value_label.add_theme_color_override("font_color",
+			Color(MatchStyle.color("muted"), 0.75).lerp(HINT_CHARGE_COLOR, 0.8 * t))
+
+
+# The unlock cue: a sound, a quick pop and a green flash that settles into
+# the accent border.
+func _play_hint_reveal(panel: PanelContainer, style: StyleBoxFlat) -> void:
+	SoundManagerScript.play_sfx_overlapping(HINT_REVEAL_SOUND, -4.0, HINT_REVEAL_PITCH_VARIATION)
+	await get_tree().process_frame  # size known after the new text lays out
+	if not is_instance_valid(panel):
+		return
+	panel.pivot_offset = Vector2(0, panel.size.y)
+	panel.scale = Vector2.ONE * (1.0 + HINT_CHARGE_SCALE)
+	panel.modulate = Color(1.0, 1.0, 1.0, 0.4)
+	style.bg_color = MatchStyle.color("added").lerp(MatchStyle.color("surface"), 0.55)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(panel, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(panel, "modulate", Color.WHITE, 0.25)
+	tween.tween_property(style, "bg_color", MatchStyle.color("surface"), 1.4).set_delay(0.3)
 
 
 func show_status(text: String, color: Color) -> void:
@@ -613,6 +710,7 @@ func _current_guess_damage() -> int:
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	_update_stake_label()
+	_charge_hints()
 	if not round_started or reveal_timer.time_left <= 0.0 or reveal_timer.wait_time <= 0.0:
 		return
 	# Drains from full height down to 0, top edge sinking toward the fixed
@@ -751,6 +849,10 @@ func _input(event):
 	guess_checking = false
 	if not is_inside_tree():
 		return
+	if Global.is_gibberish_guess(typed):
+		close_guess()  # a stray "/" or single letter - not counted, no HP lost
+		return
+	Global.run.log_guess("you", typed, false)
 	PlayerStats.record_wrong()
 	var self_damage = 50
 	if Global.run.double_down_armed:
@@ -759,7 +861,7 @@ func _input(event):
 	Global.run.Health.damage(self_damage)
 	if Global.multiplayer_match_over:
 		return  # damage() can end the match mid-function - bail before touching the freed scene
-	MultiplayerSync.send_guess_result(false)
+	MultiplayerSync.send_guess_result(false, 0, typed)
 	close_guess()
 	Global.run.number_of_wrong_guesses += 1
 
@@ -791,6 +893,7 @@ func correct_guess(typed_guess: String = ""):
 	# The opponent's own Double Down doubles it again on their side.
 	var damage_dealt = damage * 2 if Global.opponent_double_down_armed else damage
 	# Logged first: in dummy mode the send below can end the match on the spot.
+	Global.run.log_guess("you", typed_guess, true)
 	Global.run.log_article("you", damage_dealt)
 	PlayerStats.record_correct(Global.run.current_round.image_id, Global.run.current_round.article_title,
 		reveal_index, chunks.size() if chunks else 0)
@@ -1198,7 +1301,13 @@ func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> voi
 	# land at any time, including after the match already ended and this
 	# board got detached from the tree through some other path a moment
 	# earlier (grace period expiring, opponent leaving, etc.).
-	if not correct or round_advancing or Global.multiplayer_match_over or not is_inside_tree():
+	if not correct:
+		# Their wrong guesses go in the end screen's per-article list (text
+		# only from builds that send it).
+		if round_started and not round_advancing and not Global.multiplayer_match_over:
+			Global.run.log_guess("opponent", guess, false)
+		return
+	if round_advancing or Global.multiplayer_match_over or not is_inside_tree():
 		return
 	round_advancing = true
 	close_guess()
@@ -1210,6 +1319,7 @@ func _on_opponent_guess_result(correct: bool, damage: int, guess: String) -> voi
 	if Global.run.double_down_armed:
 		damage *= 2  # our Double Down backfired - they guessed first
 		Global.set_double_down_armed(false)
+	Global.run.log_guess("opponent", guess, true)
 	Global.run.log_article("opponent", damage)
 	Global.run.Health.damage(damage)
 	if Global.multiplayer_match_over:
@@ -1262,11 +1372,13 @@ func _update_stake_label() -> void:
 	if Global.opponent_double_down_armed:
 		multiplier *= 2
 	var stake = _current_guess_damage() * multiplier
+	# Plus what a drawn round (nobody guesses / both skip) costs each player.
+	var draw_text := "  ·  Nobody guesses: %d each" % _skip_damage()
 	if multiplier > 1:
-		$StakeLabel.text = "Damage: %d (x%d)" % [stake, multiplier]
+		$StakeLabel.text = "Damage: %d (x%d)%s" % [stake, multiplier, draw_text]
 		$StakeLabel.add_theme_color_override("font_color", MatchStyle.color("warning"))
 	else:
-		$StakeLabel.text = "Damage: %d" % stake
+		$StakeLabel.text = "Damage: %d%s" % [stake, draw_text]
 		$StakeLabel.add_theme_color_override("font_color", MatchStyle.color("muted"))
 
 

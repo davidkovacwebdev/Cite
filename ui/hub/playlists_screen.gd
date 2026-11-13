@@ -7,7 +7,9 @@ extends "res://ui/hub/hub_screen.gd"
 # (opens the lobby's host form with this playlist already picked).
 
 const DETAILS_WIDTH := 340
-const PREVIEW_SIZE := 96
+const PREVIEW_SIZE := 64
+# Compact action buttons so the description gets the panel's height.
+const ACTION_FONT_SIZE := 14
 const OFFICIAL_AUTHOR := "Cite team"
 
 var selector: PlaylistSelector
@@ -99,19 +101,28 @@ func _build_details() -> Control:
 	details_box.add_theme_constant_override("separation", 10)
 	outer.add_child(details_box)
 
+	# Preview beside the name/author, not above them.
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 12)
+	details_box.add_child(head)
 	preview = TextureRect.new()
 	preview.custom_minimum_size = Vector2(PREVIEW_SIZE, PREVIEW_SIZE)
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	preview.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	details_box.add_child(preview)
+	preview.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	head.add_child(preview)
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.add_theme_constant_override("separation", 2)
+	head.add_child(names)
 
 	name_label = _label("", "HeaderMedium")
 	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	details_box.add_child(name_label)
+	names.add_child(name_label)
 
 	author_label = _label("", "BodyLabel")
-	details_box.add_child(author_label)
+	author_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	names.add_child(author_label)
 
 	var meta := HBoxContainer.new()
 	meta.add_theme_constant_override("separation", 10)
@@ -132,19 +143,39 @@ func _build_details() -> Control:
 	scroll.add_child(description_label)
 	details_box.add_child(scroll)
 
-	details_box.add_child(_button("Play Single Player", "CtaButton", func():
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	details_box.add_child(actions)
+	var play := _button("Single Player", "CtaButton", func():
 		if _still_available():
-			_start_single_player(false, selected_id)))
-	details_box.add_child(_button("Create Room", "", func():
+			_start_single_player(false, selected_id))
+	var room := _button("Create Room", "", func():
 		if _still_available():
-			_create_room_with(selected_id)))
-	workshop_button = _button("View on Steam Workshop", "OutlineButton", func():
+			_create_room_with(selected_id))
+	for b in [play, room]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", ACTION_FONT_SIZE)
+		actions.add_child(b)
+		_compact.call_deferred(b)  # once in the tree, so it copies the hub theme's boxes
+	workshop_button = _button("View on Steam Workshop", "SmallButton", func():
 		Workshop.open_item_page(Workshop.file_id_of(selected_id)))
 	workshop_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	details_box.add_child(workshop_button)
 
 	_show_details(false)
 	return panel
+
+
+# Shorter padding than the theme's 18x8 for these buttons.
+func _compact(b: Button) -> void:
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var box := b.get_theme_stylebox(state).duplicate() as StyleBox
+		if box:
+			box.content_margin_left = 10
+			box.content_margin_right = 10
+			box.content_margin_top = 5
+			box.content_margin_bottom = 5
+			b.add_theme_stylebox_override(state, box)
 
 
 # --- Data ---------------------------------------------------------------------

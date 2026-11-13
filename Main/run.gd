@@ -81,10 +81,23 @@ var mp_hand_dealt: bool = false
 # article: {"title", "result": "you" / "opponent" / "skipped" / "timeout",
 # "damage": damage the guesser dealt, or what each player took on a draw}.
 var mp_log: Array = []
+# Multiplayer: every guess made this match, for the end screen's per-article
+# hover. {"round", "who": "you" / "opponent", "text" ("" = Letter Reveal
+# finished the title), "correct"}. Gibberish guesses (Global.is_gibberish_guess)
+# aren't counted, so they aren't logged either.
+var mp_guesses: Array = []
 
 
 func log_article(result: String, damage: int) -> void:
-	mp_log.append({"title": current_round.article_title, "result": result, "damage": damage})
+	mp_log.append({"title": current_round.article_title, "result": result, "damage": damage, "round": round_number})
+
+
+func log_guess(who: String, text: String, correct: bool) -> void:
+	mp_guesses.append({"round": round_number, "who": who, "text": text, "correct": correct})
+
+
+func guesses_for_round(number: int) -> Array:
+	return mp_guesses.filter(func(g): return int(g["round"]) == number)
 
 
 
